@@ -1,0 +1,8 @@
+*.db
+web/node_modules/
+web/dist/
+x-*
+.qoder
+.vscode
+node_modules/
+dist
