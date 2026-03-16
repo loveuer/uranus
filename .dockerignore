@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# CI/CD
+.github
+
+# Documentation
+*.md
+LICENSE
+
+# Build artifacts
+uranus
+*.exe
+*.sha256
+dist/
+
+# Test files
+*_test.go
+tests/
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (不要在镜像中包含)
+data/
+*.db
+
+# Node modules (前端构建后不需要)
+web/node_modules/
+web/.gitignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp

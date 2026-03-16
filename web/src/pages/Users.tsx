@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControlLabel, IconButton, Switch, TextField, Tooltip, Typography,
+  FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, OutlinedInput, Select, Switch,
+  TextField, Tooltip, Typography,
 } from '@mui/material'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import KeyIcon from '@mui/icons-material/Key'
-import type { User } from '../types'
+import type { User, Module } from '../types'
+import { ALL_MODULES } from '../types'
 import { userApi } from '../api'
 
 export default function UsersPage() {
@@ -19,11 +21,11 @@ export default function UsersPage() {
 
   // 编辑
   const [editUser, setEditUser] = useState<User | null>(null)
-  const [editData, setEditData] = useState({ email: '', is_admin: false, status: 1 })
+  const [editData, setEditData] = useState({ email: '', is_admin: false, status: 1, upload_modules: [] as Module[] })
 
   // 新建
   const [createOpen, setCreateOpen] = useState(false)
-  const [createData, setCreateData] = useState({ username: '', password: '', email: '', is_admin: false })
+  const [createData, setCreateData] = useState({ username: '', password: '', email: '', is_admin: false, upload_modules: [] as Module[] })
   const [createError, setCreateError] = useState('')
 
   // 重置密码
@@ -46,7 +48,7 @@ export default function UsersPage() {
 
   const handleEdit = (user: User) => {
     setEditUser(user)
-    setEditData({ email: user.email, is_admin: user.is_admin, status: user.status })
+    setEditData({ email: user.email, is_admin: user.is_admin, status: user.status, upload_modules: user.upload_modules || [] })
   }
 
   const handleSave = async () => {
@@ -71,7 +73,7 @@ export default function UsersPage() {
     try {
       await userApi.create(createData)
       setCreateOpen(false)
-      setCreateData({ username: '', password: '', email: '', is_admin: false })
+      setCreateData({ username: '', password: '', email: '', is_admin: false, upload_modules: [] })
       load()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -107,6 +109,22 @@ export default function UsersPage() {
       field: 'status', headerName: 'Status', width: 100,
       renderCell: ({ value }) => (
         <Chip label={value === 1 ? 'Active' : 'Disabled'} color={value === 1 ? 'success' : 'error'} size="small" />
+      ),
+    },
+    {
+      field: 'upload_modules', headerName: 'Upload Permissions', flex: 1,
+      renderCell: ({ row }) => (
+        <Box>
+          {row.is_admin ? (
+            <Chip label="All Modules" color="primary" size="small" />
+          ) : row.upload_modules && row.upload_modules.length > 0 ? (
+            row.upload_modules.map((m: Module) => (
+              <Chip key={m} label={m} size="small" sx={{ mr: 0.5 }} />
+            ))
+          ) : (
+            <Chip label="No Upload" color="default" size="small" />
+          )}
+        </Box>
       ),
     },
     {
@@ -178,6 +196,30 @@ export default function UsersPage() {
               control={<Switch checked={createData.is_admin} onChange={(e) => setCreateData({ ...createData, is_admin: e.target.checked })} />}
               label="Admin"
             />
+            {!createData.is_admin && (
+              <FormControl fullWidth>
+                <InputLabel>Upload Permissions</InputLabel>
+                <Select
+                  multiple
+                  value={createData.upload_modules}
+                  onChange={(e) => setCreateData({ ...createData, upload_modules: e.target.value as Module[] })}
+                  input={<OutlinedInput label="Upload Permissions" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected as Module[]).map((value) => (
+                        <Chip key={value} label={value} size="small" />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  {ALL_MODULES.map((module) => (
+                    <MenuItem key={module} value={module}>
+                      {module}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -204,6 +246,30 @@ export default function UsersPage() {
               control={<Switch checked={editData.status === 1} onChange={(e) => setEditData({ ...editData, status: e.target.checked ? 1 : 0 })} />}
               label="Active"
             />
+            {!editData.is_admin && (
+              <FormControl fullWidth>
+                <InputLabel>Upload Permissions</InputLabel>
+                <Select
+                  multiple
+                  value={editData.upload_modules}
+                  onChange={(e) => setEditData({ ...editData, upload_modules: e.target.value as Module[] })}
+                  input={<OutlinedInput label="Upload Permissions" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected as Module[]).map((value) => (
+                        <Chip key={value} label={value} size="small" />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  {ALL_MODULES.map((module) => (
+                    <MenuItem key={module} value={module}>
+                      {module}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
