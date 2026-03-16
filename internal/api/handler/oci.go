@@ -10,6 +10,7 @@ import (
 	"github.com/loveuer/ursa"
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/middleware"
+	"gitea.loveuer.com/loveuer/uranus/v2/internal/model"
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/service"
 	ocisvc "gitea.loveuer.com/loveuer/uranus/v2/internal/service/oci"
 )
@@ -379,19 +380,19 @@ func ociError(code, message string) ursa.Map {
 	}
 }
 
-// resolveAuth 从请求中解析认证信息，返回 (userID, username, ok)
-func (h *OciHandler) resolveAuth(c *ursa.Ctx) (uint, string, bool) {
+// resolveAuth 从请求中解析认证信息，返回 (userID, username, isAdmin, uploadModules, ok)
+func (h *OciHandler) resolveAuth(c *ursa.Ctx) (uint, string, bool, model.UserUploadModules, bool) {
 	// 优先从 Locals 获取（已由中间件解析）
 	userID := middleware.GetUserID(c)
 	username := middleware.GetUsername(c)
 	if userID > 0 && username != "" {
-		return userID, username, true
+		return userID, username, middleware.IsAdmin(c), middleware.GetUploadModules(c), true
 	}
 
 	// 尝试直接解析 Authorization header
 	header := c.Get("Authorization")
 	if header == "" {
-		return 0, "", false
+		return 0, "", false, nil, false
 	}
 
 	// 这里复用 middleware 的逻辑，但直接返回结果
@@ -400,9 +401,9 @@ func (h *OciHandler) resolveAuth(c *ursa.Ctx) (uint, string, bool) {
 		token := strings.TrimPrefix(header, "Bearer ")
 		claims, err := h.auth.ValidateToken(token)
 		if err != nil {
-			return 0, "", false
+			return 0, "", false, nil, false
 		}
-		return claims.UserID, claims.Username, true
+		return claims.UserID, claims.Username, claims.IsAdmin, claims.UploadModules, true
 	}
 
 	if strings.HasPrefix(header, "Basic ") {
@@ -410,19 +411,36 @@ func (h *OciHandler) resolveAuth(c *ursa.Ctx) (uint, string, bool) {
 		encoded := strings.TrimPrefix(header, "Basic ")
 		decoded, err := base64.StdEncoding.DecodeString(encoded)
 		if err != nil {
-			return 0, "", false
+			return 0, "", false, nil, false
 		}
 		parts := strings.SplitN(string(decoded), ":", 2)
 		if len(parts) != 2 {
-			return 0, "", false
+			return 0, "", false, nil, false
 		}
 		user, err := h.auth.VerifyCredentials(c.Request.Context(), parts[0], parts[1])
 		if err != nil {
-			return 0, "", false
+			return 0, "", false, nil, false
 		}
-		return user.ID, user.Username, true
+		return user.ID, user.Username, user.IsAdmin, user.UploadModules, true
 	}
 
+	return 0, "", false, nil, false
+}
+
+// checkUploadPermission 检查用户是否有 OCI 模块上传权限
+func (h *OciHandler) checkUploadPermission(c *ursa.Ctx) (uint, string, bool) {
+	userID, username, isAdmin, uploadModules, ok := h.resolveAuth(c)
+	if !ok {
+		return 0, "", false
+	}
+	if isAdmin {
+		return userID, username, true
+	}
+	for _, m := range uploadModules {
+		if m == model.ModuleOci {
+			return userID, username, true
+		}
+	}
 	return 0, "", false
 }
 
@@ -430,8 +448,8 @@ func (h *OciHandler) resolveAuth(c *ursa.Ctx) (uint, string, bool) {
 
 // putManifest PUT /v2/<name>/manifests/<reference>
 func (h *OciHandler) putManifest(c *ursa.Ctx, name, reference string) error {
-	// 认证检查 - 使用 Basic Auth 或 Bearer Token
-	userID, username, ok := h.resolveAuth(c)
+	// 认证和权限检查 - 使用 Basic Auth 或 Bearer Token
+	userID, username, ok := h.checkUploadPermission(c)
 	if !ok {
 		// Docker 客户端需要正确的 WWW-Authenticate header
 		// 返回 Basic auth 挑战，让客户端使用 Basic Auth
@@ -464,8 +482,8 @@ func (h *OciHandler) putManifest(c *ursa.Ctx, name, reference string) error {
 // postBlobUpload POST /v2/<name>/blobs/uploads/
 // 初始化 blob 上传
 func (h *OciHandler) postBlobUpload(c *ursa.Ctx, name string) error {
-	// 认证检查
-	if _, _, ok := h.resolveAuth(c); !ok {
+	// 认证和权限检查
+	if _, _, ok := h.checkUploadPermission(c); !ok {
 		c.Set("WWW-Authenticate", `Basic realm="Uranus Docker Registry"`)
 		return c.Status(401).JSON(ociError("UNAUTHORIZED", "authentication required"))
 	}
@@ -484,8 +502,8 @@ func (h *OciHandler) postBlobUpload(c *ursa.Ctx, name string) error {
 // putBlobUpload PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 // 完成 blob 上传
 func (h *OciHandler) putBlobUpload(c *ursa.Ctx, name, digest string) error {
-	// 认证检查
-	if _, _, ok := h.resolveAuth(c); !ok {
+	// 认证和权限检查
+	if _, _, ok := h.checkUploadPermission(c); !ok {
 		c.Set("WWW-Authenticate", `Basic realm="Uranus Docker Registry"`)
 		return c.Status(401).JSON(ociError("UNAUTHORIZED", "authentication required"))
 	}
@@ -502,8 +520,8 @@ func (h *OciHandler) putBlobUpload(c *ursa.Ctx, name, digest string) error {
 
 // deleteManifest DELETE /v2/<name>/manifests/<reference>
 func (h *OciHandler) deleteManifest(c *ursa.Ctx, name, reference string) error {
-	// 认证检查（仅管理员或推送者可删除）
-	userID, _, ok := h.resolveAuth(c)
+	// 认证和权限检查（仅管理员或有 oci 上传权限的用户可删除）
+	userID, _, ok := h.checkUploadPermission(c)
 	if !ok {
 		c.Set("WWW-Authenticate", `Bearer realm="ufshare",service="registry"`)
 		return c.Status(401).JSON(ociError("UNAUTHORIZED", "authentication required"))

@@ -52,9 +52,10 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpire time.Duration) *Aut
 }
 
 type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"is_admin"`
+	UserID        uint               `json:"user_id"`
+	Username      string             `json:"username"`
+	IsAdmin       bool               `json:"is_admin"`
+	UploadModules model.UserUploadModules `json:"upload_modules"`
 	jwt.RegisteredClaims
 }
 
@@ -188,9 +189,10 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint, oldPasswo
 
 func (s *AuthService) generateToken(user *model.User) (string, error) {
 	claims := &Claims{
-		UserID:   user.ID,
-		Username: user.Username,
-		IsAdmin:  user.IsAdmin,
+		UserID:        user.ID,
+		Username:      user.Username,
+		IsAdmin:       user.IsAdmin,
+		UploadModules: user.UploadModules,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.jwtExpire)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

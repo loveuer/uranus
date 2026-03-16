@@ -6,6 +6,7 @@ import (
 	"github.com/loveuer/ursa"
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/middleware"
+	"gitea.loveuer.com/loveuer/uranus/v2/internal/model"
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/service"
 )
 
@@ -18,10 +19,11 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 }
 
 type CreateUserRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
-	IsAdmin  bool   `json:"is_admin"`
+	Username      string              `json:"username"`
+	Password      string              `json:"password"`
+	Email         string              `json:"email"`
+	IsAdmin       bool                `json:"is_admin"`
+	UploadModules model.UserUploadModules `json:"upload_modules"`
 }
 
 // Create 创建用户
@@ -41,7 +43,7 @@ func (h *UserHandler) Create(c *ursa.Ctx) error {
 		})
 	}
 
-	user, err := h.userService.CreateUser(c.Request.Context(), req.Username, req.Password, req.Email, req.IsAdmin)
+	user, err := h.userService.CreateUser(c.Request.Context(), req.Username, req.Password, req.Email, req.IsAdmin, req.UploadModules)
 	if err != nil {
 		return c.Status(500).JSON(ursa.Map{
 			"code":    500,
@@ -119,10 +121,11 @@ func (h *UserHandler) Get(c *ursa.Ctx) error {
 }
 
 type UpdateUserRequest struct {
-	Email    *string `json:"email"`
-	Password *string `json:"password"`
-	Status   *int    `json:"status"`
-	IsAdmin  *bool   `json:"is_admin"`
+	Email         *string                 `json:"email"`
+	Password      *string                 `json:"password"`
+	Status        *int                    `json:"status"`
+	IsAdmin       *bool                   `json:"is_admin"`
+	UploadModules *model.UserUploadModules `json:"upload_modules"`
 }
 
 // Update 更新用户
@@ -155,6 +158,9 @@ func (h *UserHandler) Update(c *ursa.Ctx) error {
 	}
 	if req.IsAdmin != nil {
 		updates["is_admin"] = *req.IsAdmin
+	}
+	if req.UploadModules != nil {
+		updates["upload_modules"] = *req.UploadModules
 	}
 
 	if len(updates) == 0 {

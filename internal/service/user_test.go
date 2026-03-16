@@ -28,7 +28,7 @@ func setupUserService(t *testing.T) (*UserService, *AuthService) {
 // 创建普通用户并返回其 ID
 func createNormalUser(t *testing.T, svc *UserService, username string) uint {
 	t.Helper()
-	u, err := svc.CreateUser(context.Background(), username, "password123", username+"@test.com", false)
+	u, err := svc.CreateUser(context.Background(), username, "password123", username+"@test.com", false, nil)
 	if err != nil {
 		t.Fatalf("createNormalUser(%q): %v", username, err)
 	}
@@ -38,7 +38,7 @@ func createNormalUser(t *testing.T, svc *UserService, username string) uint {
 // 创建管理员用户并返回其 ID
 func createAdminUser(t *testing.T, svc *UserService, username string) uint {
 	t.Helper()
-	u, err := svc.CreateUser(context.Background(), username, "password123", username+"@test.com", true)
+	u, err := svc.CreateUser(context.Background(), username, "password123", username+"@test.com", true, nil)
 	if err != nil {
 		t.Fatalf("createAdminUser(%q): %v", username, err)
 	}
