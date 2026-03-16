@@ -1,3 +1,5 @@
+export type Module = 'file' | 'npm' | 'oci' | 'maven' | 'pypi' | 'go'
+
 export interface User {
   id: number
   created_at: string
@@ -6,7 +8,10 @@ export interface User {
   email: string
   is_admin: boolean
   status: number
+  upload_modules: Module[]
 }
+
+export const ALL_MODULES: Module[] = ['file', 'npm', 'oci', 'maven', 'pypi', 'go']
 
 export interface FileEntry {
   id: number

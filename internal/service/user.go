@@ -81,18 +81,19 @@ func (s *UserService) DeleteUser(ctx context.Context, callerID, targetID uint) e
 }
 
 // CreateUser 创建用户
-func (s *UserService) CreateUser(ctx context.Context, username, password, email string, isAdmin bool) (*model.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, username, password, email string, isAdmin bool, uploadModules model.UserUploadModules) (*model.User, error) {
 	hashed, err := hashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 
 	user := &model.User{
-		Username: username,
-		Password: hashed,
-		Email:    email,
-		IsAdmin:  isAdmin,
-		Status:   1,
+		Username:      username,
+		Password:      hashed,
+		Email:         email,
+		IsAdmin:       isAdmin,
+		Status:        1,
+		UploadModules: uploadModules,
 	}
 
 	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {

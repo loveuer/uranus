@@ -9,6 +9,7 @@ import (
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/handler"
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/middleware"
+	"gitea.loveuer.com/loveuer/uranus/v2/internal/model"
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/service"
 	mavensvc "gitea.loveuer.com/loveuer/uranus/v2/internal/service/maven"
 	npmsvc "gitea.loveuer.com/loveuer/uranus/v2/internal/service/npm"
@@ -177,12 +178,12 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	app.Get("/simple/", pypiHandler.GetSimpleIndex)
 	app.Get("/simple/:name/", pypiHandler.GetSimpleIndex)
 	app.Get("/packages/:name/:filename", pypiHandler.GetPackageFile)
-	app.Post("/legacy/", middleware.Auth(r.authService), pypiHandler.UploadPackage)
+	app.Post("/legacy/", middleware.Auth(r.authService), middleware.RequireUploadPermission(model.ModulePyPI), pypiHandler.UploadPackage)
 	// /pypi/ 路径
 	app.Get("/pypi/simple/", pypiHandler.GetSimpleIndex)
 	app.Get("/pypi/simple/:name/", pypiHandler.GetSimpleIndex)
 	app.Get("/pypi/packages/:name/:filename", pypiHandler.GetPackageFile)
-	app.Post("/pypi/legacy/", middleware.Auth(r.authService), pypiHandler.UploadPackage)
+	app.Post("/pypi/legacy/", middleware.Auth(r.authService), middleware.RequireUploadPermission(model.ModulePyPI), pypiHandler.UploadPackage)
 
 	// ── 前端静态文件 + SPA fallback（由 ursa.Config.NotFoundHandler 处理）──────
 }
@@ -198,21 +199,21 @@ func RegisterNpmRoutes(app *ursa.App, npmHandler *handler.NpmHandler, auth *serv
 	//   GET    {prefix}/@:scope/:name                packument
 	//   GET    {prefix}/@:scope/:name/:version        version metadata
 	//   GET    {prefix}/@:scope/:name/-/:file         tarball 下载
-	//   PUT    {prefix}/@:scope/:name                 npm publish（需认证）
+	//   PUT    {prefix}/@:scope/:name                 npm publish（需认证+权限）
 	app.Get(prefix+"/@:scope/:name/-/:file", npmHandler.GetTarball)
 	app.Get(prefix+"/@:scope/:name/:version", npmHandler.GetVersion)
 	app.Get(prefix+"/@:scope/:name", npmHandler.GetPackument)
-	app.Put(prefix+"/@:scope/:name", middleware.Auth(auth), npmHandler.Publish)
+	app.Put(prefix+"/@:scope/:name", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleNpm), npmHandler.Publish)
 
 	// 普通包（unscoped）
 	//   GET    {prefix}/:package                   packument
 	//   GET    {prefix}/:package/:version           version metadata
 	//   GET    {prefix}/:package/-/:file            tarball 下载（本地缓存 + 代理）
-	//   PUT    {prefix}/:package                    npm publish（需认证）
+	//   PUT    {prefix}/:package                    npm publish（需认证+权限）
 	app.Get(prefix+"/:package/-/:file", npmHandler.GetTarball)
 	app.Get(prefix+"/:package/:version", npmHandler.GetVersion)
 	app.Get(prefix+"/:package", npmHandler.GetPackument)
-	app.Put(prefix+"/:package", middleware.Auth(auth), npmHandler.Publish)
+	app.Put(prefix+"/:package", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleNpm), npmHandler.Publish)
 }
 
 // RegisterOciRoutes 注册 OCI Distribution API 路由
@@ -232,10 +233,10 @@ func RegisterMavenRoutes(app *ursa.App, mavenHandler *handler.MavenHandler, auth
 	app.Get(prefix+"/*path", mavenHandler.GetArtifact)
 	// HEAD /maven/*path - 检查文件是否存在（公开）
 	app.Head(prefix+"/*path", mavenHandler.HeadArtifact)
-	// PUT /maven/*path - 上传制品（需认证）
-	app.Put(prefix+"/*path", middleware.Auth(auth), mavenHandler.PutArtifact)
-	// DELETE /maven/*path - 删除制品（需认证）
-	app.Delete(prefix+"/*path", middleware.Auth(auth), mavenHandler.DeleteArtifact)
+	// PUT /maven/*path - 上传制品（需认证+权限）
+	app.Put(prefix+"/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleMaven), mavenHandler.PutArtifact)
+	// DELETE /maven/*path - 删除制品（需认证+权限）
+	app.Delete(prefix+"/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleMaven), mavenHandler.DeleteArtifact)
 }
 
 // RegisterPyPIRoutes 注册 PyPI 仓库路由
@@ -263,13 +264,13 @@ func RegisterFileRoutes(app *ursa.App, fileHandler *handler.FileHandler, auth *s
 	if prefix == "" {
 		// 独立端口：只注册通配符路由
 		app.Get("/*path", fileHandler.Download)
-		app.Put("/*path", middleware.Auth(auth), fileHandler.Upload)
-		app.Delete("/*path", middleware.Auth(auth), fileHandler.Delete)
+		app.Put("/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleFile), fileHandler.Upload)
+		app.Delete("/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleFile), fileHandler.Delete)
 	} else {
 		// 主端口：注册具体路径 + 通配符
 		app.Get(prefix, fileHandler.List)
 		app.Get(prefix+"/*path", fileHandler.Download)
-		app.Put(prefix+"/*path", middleware.Auth(auth), fileHandler.Upload)
-		app.Delete(prefix+"/*path", middleware.Auth(auth), fileHandler.Delete)
+		app.Put(prefix+"/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleFile), fileHandler.Upload)
+		app.Delete(prefix+"/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleFile), fileHandler.Delete)
 	}
 }
