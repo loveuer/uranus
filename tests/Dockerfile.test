@@ -1,0 +1,27 @@
+# Uranus 测试镜像
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -o uranus ./cmd/uranus
+
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates wget
+
+WORKDIR /app
+COPY --from=builder /app/uranus .
+
+# 创建默认管理员凭据文件
+RUN mkdir -p /data
+
+EXPOSE 9817 5000 4873
+
+ENV JWT_SECRET=""
+ENV DB_DRIVER=sqlite
+ENV DB_DSN=/data/uranus.db
+
+CMD ["./uranus", "--address", "0.0.0.0:9817", "--data", "/data"]
