@@ -15,7 +15,7 @@ import DownloadIcon from '@mui/icons-material/Download'
 import { alpineApi } from '../api'
 import type { AlpinePackage, AlpineCacheStats } from '../types'
 
-const BRANCHES = ['v3.19', 'v3.18', 'edge']
+const BRANCHES = ['v3.23', 'v3.22', 'v3.21', 'v3.20', 'edge']
 const REPOS = ['main', 'community']
 const ARCHS = ['x86_64', 'aarch64', 'armv7', 'x86']
 

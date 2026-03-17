@@ -33,6 +33,9 @@ func (h *SettingHandler) GetAll(c *ursa.Ctx) error {
 	for _, key := range []string{
 		service.SettingNpmEnabled, service.SettingNpmAddr,
 		service.SettingFileEnabled, service.SettingFileAddr,
+		service.SettingAlpineEnabled, service.SettingAlpineUpstream,
+		service.SettingAlpineBranches, service.SettingAlpineSyncInterval,
+		service.SettingAlpineCacheTTL,
 	} {
 		if _, ok := result[key]; !ok {
 			result[key] = ""

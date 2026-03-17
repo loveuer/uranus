@@ -43,6 +43,16 @@ func NewSyncManager(upstream, localDir string) *SyncManager {
 	}
 }
 
+// UpdateUpstream 更新上游地址
+func (sm *SyncManager) UpdateUpstream(upstream string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	if upstream != "" {
+		sm.upstream = upstream
+		log.Printf("[alpine] upstream updated to: %s", upstream)
+	}
+}
+
 // SyncBlocking 阻塞式同步（首次/强制刷新）
 func (sm *SyncManager) SyncBlocking(ctx context.Context, key IndexKey) error {
 	// 检查是否已在同步中

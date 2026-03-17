@@ -97,7 +97,7 @@ func DefaultRepository() *Repository {
 	return &Repository{
 		Name:         "Alpine Linux",
 		UpstreamURL:  "https://dl-cdn.alpinelinux.org/alpine",
-		Branches:     []string{"v3.19", "v3.18"},
+		Branches:     []string{"v3.23", "v3.22", "v3.21", "v3.20", "edge"},
 		Repos:        []string{"main", "community"},
 		Archs:        []string{"x86_64", "aarch64", "armv7", "x86"},
 		SyncInterval: 30 * time.Minute,

@@ -54,4 +54,57 @@ test.describe('Alpine Proxy API', () => {
     const response = await request.get('/api/v1/alpine/stats')
     expect(response.status()).toBe(401)
   })
+
+  test('can access v3.23 index', async ({ request }) => {
+    const response = await request.get('/alpine/v3.23/main/x86_64/APKINDEX.tar.gz')
+    expect(response.ok()).toBeTruthy()
+  })
+})
+
+test.describe('Alpine Settings', () => {
+  test.beforeEach(async ({ page }) => {
+    // 登录
+    await page.goto('/login')
+    await page.waitForSelector('input[type="text"]')
+    await page.fill('input[type="text"]', 'admin')
+    await page.fill('input[type="password"]', 'admin123')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/files/)
+  })
+
+  test('Alpine settings tab exists', async ({ page }) => {
+    // 导航到设置页面
+    await page.click('text=Settings')
+    await expect(page).toHaveURL(/\/settings/)
+    
+    // 点击 Alpine tab - 使用更精确的选择器
+    await page.getByRole('tab', { name: /Alpine/i }).click()
+    
+    // 验证设置表单存在
+    await expect(page.getByText('Alpine Module')).toBeVisible()
+    // 使用 placeholder 来定位输入框
+    await expect(page.locator('input[placeholder="https://dl-cdn.alpinelinux.org/alpine"]')).toBeVisible()
+    await expect(page.locator('input[placeholder="v3.23,v3.22,v3.21,v3.20,edge"]')).toBeVisible()
+  })
+
+  test('can view and save Alpine settings', async ({ page }) => {
+    // 导航到设置页面
+    await page.click('text=Settings')
+    await expect(page).toHaveURL(/\/settings/)
+    
+    await page.getByRole('tab', { name: /Alpine/i }).click()
+    
+    // 验证输入框存在（通过 label 文本）
+    await expect(page.getByLabel('Upstream Repository')).toBeVisible()
+    await expect(page.getByLabel('Branches')).toBeVisible()
+    
+    // 启用 Alpine
+    await page.getByLabel('Enable Alpine APK proxy').check()
+    
+    // 保存设置
+    await page.getByRole('button', { name: 'Save' }).click()
+    
+    // 验证保存成功提示
+    await expect(page.getByText('Saved successfully')).toBeVisible()
+  })
 })

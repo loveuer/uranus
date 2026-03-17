@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/loveuer/ursa"
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/middleware"
+	"gitea.loveuer.com/loveuer/uranus/v2/internal/service"
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/service/alpine"
 )
 
@@ -23,29 +25,57 @@ func sendFile(c *ursa.Ctx, path string) error {
 
 // AlpineHandler Alpine APK 代理处理器
 type AlpineHandler struct {
-	indexMgr   *alpine.IndexManager
-	syncMgr    *alpine.SyncManager
-	scheduler  *alpine.SyncScheduler
-	localDir   string
-	refreshSem chan struct{} // 后台刷新信号量
+	indexMgr       *alpine.IndexManager
+	syncMgr        *alpine.SyncManager
+	scheduler      *alpine.SyncScheduler
+	localDir       string
+	refreshSem     chan struct{} // 后台刷新信号量
+	settingService *service.SettingService
 }
 
 // NewAlpineHandler 创建处理器
-func NewAlpineHandler(dataDir string) *AlpineHandler {
+func NewAlpineHandler(dataDir string, settingService *service.SettingService) *AlpineHandler {
 	localDir := filepath.Join(dataDir, "alpine")
 	repo := alpine.DefaultRepository()
+
+	// 从设置服务读取配置
+	upstreamURL := settingService.GetAlpineUpstream()
+	branchesStr := settingService.GetAlpineBranches()
+	syncInterval := time.Duration(settingService.GetAlpineSyncInterval()) * time.Minute
+	cacheTTL := time.Duration(settingService.GetAlpineCacheTTL()) * time.Minute
+
+	// 更新仓库配置
+	repo.UpstreamURL = upstreamURL
+	if branchesStr != "" {
+		repo.Branches = strings.Split(branchesStr, ",")
+	}
+	repo.SyncInterval = syncInterval
+	repo.CacheTTL = cacheTTL
 
 	indexMgr := alpine.NewIndexManager(localDir, repo)
 	syncMgr := alpine.NewSyncManager(repo.UpstreamURL, localDir)
 	scheduler := alpine.NewSyncScheduler(repo.SyncInterval, syncMgr, repo)
 
 	h := &AlpineHandler{
-		indexMgr:   indexMgr,
-		syncMgr:    syncMgr,
-		scheduler:  scheduler,
-		localDir:   localDir,
-		refreshSem: make(chan struct{}, 5),
+		indexMgr:       indexMgr,
+		syncMgr:        syncMgr,
+		scheduler:      scheduler,
+		localDir:       localDir,
+		refreshSem:     make(chan struct{}, 5),
+		settingService: settingService,
 	}
+
+	// 监听配置变更
+	settingService.OnChange(service.SettingAlpineUpstream, func(newValue string) {
+		log.Printf("[alpine] upstream changed to: %s", newValue)
+		h.syncMgr.UpdateUpstream(newValue)
+	})
+	settingService.OnChange(service.SettingAlpineBranches, func(newValue string) {
+		log.Printf("[alpine] branches changed to: %s", newValue)
+		if newValue != "" {
+			repo.Branches = strings.Split(newValue, ",")
+		}
+	})
 
 	// 启动定时同步
 	scheduler.Start(context.Background())
@@ -135,8 +165,8 @@ func (h *AlpineHandler) GetPackage(c *ursa.Ctx) error {
 
 	// 2. 从上游下载
 	ctx := c.Request.Context()
-	remoteURL := fmt.Sprintf("%s/%s/%s",
-		alpine.DefaultRepository().UpstreamURL, key.String(), pkgFile)
+	upstreamURL := h.settingService.GetAlpineUpstream()
+	remoteURL := fmt.Sprintf("%s/%s/%s", upstreamURL, key.String(), pkgFile)
 
 	log.Printf("[alpine] downloading package: %s", pkgFile)
 

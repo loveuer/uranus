@@ -189,7 +189,7 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	app.Post("/pypi/legacy/", middleware.Auth(r.authService), middleware.RequireUploadPermission(model.ModulePyPI), pypiHandler.UploadPackage)
 
 	// ── Alpine APK repository（主端口，/alpine 前缀）─────────────────────────────
-	alpineHandler := handler.NewAlpineHandler(r.dataDir)
+	alpineHandler := handler.NewAlpineHandler(r.dataDir, r.settingService)
 	RegisterAlpineRoutes(app, alpineHandler, r.authService)
 
 	// ── 前端静态文件 + SPA fallback（由 ursa.Config.NotFoundHandler 处理）──────

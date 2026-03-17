@@ -9,6 +9,7 @@ import TerminalIcon from '@mui/icons-material/Terminal'
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import ExtensionIcon from '@mui/icons-material/Extension'
+import TerrainIcon from '@mui/icons-material/Terrain'
 import { settingApi } from '../api'
 
 interface FieldConfig {
@@ -167,6 +168,42 @@ const MODULES: ModuleConfig[] = [
         label: 'Dedicated Listen Address',
         hint: 'pip clients point here directly',
         placeholder: '0.0.0.0:8083',
+      },
+    ],
+  },
+  {
+    icon: <TerrainIcon fontSize="small" />,
+    title: 'Alpine',
+    enabledKey: 'alpine.enabled',
+    enabledLabel: 'Enable Alpine APK proxy',
+    fields: [
+      {
+        key: 'alpine.upstream',
+        label: 'Upstream Repository',
+        hint: 'Alpine APK repository upstream for proxy/cache',
+        placeholder: 'https://dl-cdn.alpinelinux.org/alpine',
+        alwaysShow: true,
+      },
+      {
+        key: 'alpine.branches',
+        label: 'Branches',
+        hint: 'Comma separated list of branches to sync (e.g., v3.23,v3.22,edge)',
+        placeholder: 'v3.23,v3.22,v3.21,v3.20,edge',
+        alwaysShow: true,
+      },
+      {
+        key: 'alpine.sync_interval',
+        label: 'Sync Interval (minutes)',
+        hint: 'How often to sync index from upstream',
+        placeholder: '30',
+        alwaysShow: true,
+      },
+      {
+        key: 'alpine.cache_ttl',
+        label: 'Cache TTL (minutes)',
+        hint: 'How long to cache before background refresh',
+        placeholder: '5',
+        alwaysShow: true,
       },
     ],
   },
