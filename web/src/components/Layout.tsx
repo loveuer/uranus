@@ -29,6 +29,7 @@ const navItems = [
   { label: 'Docker', path: '/docker', icon: <CloudDownloadIcon /> },
   { label: 'Maven', path: '/maven', icon: <MavenIcon /> },
   { label: 'PyPI', path: '/pypi', icon: <PackageIcon /> },
+  { label: 'Alpine', path: '/alpine', icon: <StorageIcon /> },
   { label: 'Users', path: '/users', icon: <PeopleIcon /> },
   { label: 'Settings', path: '/settings', icon: <SettingsIcon /> },
 ]
