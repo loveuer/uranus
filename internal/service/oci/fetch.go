@@ -109,6 +109,23 @@ func (s *Service) ManifestExists(ctx context.Context, name, reference string) (i
 	return int64(len(content)), mediaType, digest, true
 }
 
+// IsLocalRepository 检查仓库是否是本地推送的（不是代理的）
+// 返回 (exists, isLocal)，exists 表示仓库是否存在，isLocal 表示是否是本地推送的
+func (s *Service) IsLocalRepository(ctx context.Context, name string) (exists bool, isLocal bool) {
+	name = s.normalizeImageName(name)
+
+	var repo model.OciRepository
+	err := s.db.WithContext(ctx).Where("name = ?", name).First(&repo).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, false
+		}
+		// 查询出错，保守起见认为是本地仓库（不代理）
+		return true, true
+	}
+	return true, repo.IsPushed
+}
+
 // ListCatalog 返回所有仓库名
 func (s *Service) ListCatalog(ctx context.Context) ([]string, error) {
 	var names []string

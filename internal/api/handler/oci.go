@@ -200,15 +200,30 @@ func (h *OciHandler) getManifest(c *ursa.Ctx, name, reference string) error {
 
 	// 先查本地
 	content, mediaType, digest, err := h.oci.GetManifest(ctx, name, reference)
+	if err == nil {
+		// 本地找到，直接返回
+		c.Set("Content-Type", mediaType)
+		c.Set("Docker-Content-Digest", digest)
+		c.Set("Content-Length", strconv.Itoa(len(content)))
+		c.Set("Docker-Distribution-API-Version", "registry/2.0")
+		_, writeErr := c.Writer.Write(content)
+		return writeErr
+	}
+
+	// 本地没有，检查是否是本地推送的仓库
+	exists, isLocal := h.oci.IsLocalRepository(ctx, name)
+	if exists && isLocal {
+		// 本地推送的仓库，不存在就是真的不存在
+		return c.Status(404).JSON(ociError("MANIFEST_UNKNOWN", "manifest unknown"))
+	}
+
+	// 代理上游（仓库不存在或者是代理仓库）
+	content, mediaType, digest, err = h.oci.ProxyManifest(ctx, name, reference)
 	if err != nil {
-		// 本地没有，代理上游
-		content, mediaType, digest, err = h.oci.ProxyManifest(ctx, name, reference)
-		if err != nil {
-			if errors.Is(err, ocisvc.ErrManifestNotFound) {
-				return c.Status(404).JSON(ociError("MANIFEST_UNKNOWN", "manifest unknown"))
-			}
-			return c.Status(502).JSON(ociError("UNKNOWN", err.Error()))
+		if errors.Is(err, ocisvc.ErrManifestNotFound) {
+			return c.Status(404).JSON(ociError("MANIFEST_UNKNOWN", "manifest unknown"))
 		}
+		return c.Status(502).JSON(ociError("UNKNOWN", err.Error()))
 	}
 
 	c.Set("Content-Type", mediaType)
@@ -224,20 +239,31 @@ func (h *OciHandler) headManifest(c *ursa.Ctx, name, reference string) error {
 	ctx := c.Request.Context()
 
 	size, mediaType, digest, ok := h.oci.ManifestExists(ctx, name, reference)
-	if !ok {
-		// 尝试代理
-		content, mt, d, err := h.oci.ProxyManifest(ctx, name, reference)
-		if err != nil {
-			return c.Status(404).JSON(ociError("MANIFEST_UNKNOWN", "manifest unknown"))
-		}
-		size = int64(len(content))
-		mediaType = mt
-		digest = d
+	if ok {
+		// 本地找到
+		c.Set("Content-Type", mediaType)
+		c.Set("Docker-Content-Digest", digest)
+		c.Set("Content-Length", strconv.FormatInt(size, 10))
+		c.Set("Docker-Distribution-API-Version", "registry/2.0")
+		return c.SendStatus(200)
 	}
 
-	c.Set("Content-Type", mediaType)
-	c.Set("Docker-Content-Digest", digest)
-	c.Set("Content-Length", strconv.FormatInt(size, 10))
+	// 本地没有，检查是否是本地推送的仓库
+	exists, isLocal := h.oci.IsLocalRepository(ctx, name)
+	if exists && isLocal {
+		// 本地推送的仓库，不存在就是真的不存在
+		return c.Status(404).JSON(ociError("MANIFEST_UNKNOWN", "manifest unknown"))
+	}
+
+	// 尝试代理上游
+	content, mt, d, err := h.oci.ProxyManifest(ctx, name, reference)
+	if err != nil {
+		return c.Status(404).JSON(ociError("MANIFEST_UNKNOWN", "manifest unknown"))
+	}
+
+	c.Set("Content-Type", mt)
+	c.Set("Docker-Content-Digest", d)
+	c.Set("Content-Length", strconv.FormatInt(int64(len(content)), 10))
 	c.Set("Docker-Distribution-API-Version", "registry/2.0")
 	return c.SendStatus(200)
 }
@@ -255,6 +281,13 @@ func (h *OciHandler) getBlob(c *ursa.Ctx, name, digest string) error {
 		c.Set("Content-Length", strconv.FormatInt(size, 10))
 		_, copyErr := io.Copy(c.Writer, rc)
 		return copyErr
+	}
+
+	// 本地没有，检查是否是本地推送的仓库
+	exists, isLocal := h.oci.IsLocalRepository(ctx, name)
+	if exists && isLocal {
+		// 本地推送的仓库，blob 不存在就是真的不存在
+		return c.Status(404).JSON(ociError("BLOB_UNKNOWN", "blob unknown"))
 	}
 
 	// 代理上游，流式返回

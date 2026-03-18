@@ -152,9 +152,12 @@ func (s *Service) PushManifest(ctx context.Context, name, reference, mediaType s
 
 // PushBlob 处理推送的 blob
 func (s *Service) PushBlob(ctx context.Context, digest string, r io.Reader) error {
-	// 确保 digest 格式正确
+	// 确保 digest 格式正确（带 sha256: 前缀）
 	digest = strings.TrimPrefix(digest, "sha256:")
 	digest = "sha256:" + digest
+
+	// 获取 blob 路径（使用 blobPath 方法确保一致性）
+	blobPath := s.blobPath(digest)
 
 	// 确保目录存在
 	blobDir := s.blobDir()
@@ -163,7 +166,6 @@ func (s *Service) PushBlob(ctx context.Context, digest string, r io.Reader) erro
 	}
 
 	// 检查 blob 是否已存在
-	blobPath := filepath.Join(blobDir, digest)
 	if _, err := os.Stat(blobPath); err == nil {
 		// 已存在，直接返回成功
 		return nil
