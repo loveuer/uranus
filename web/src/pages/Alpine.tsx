@@ -12,6 +12,7 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StorageIcon from '@mui/icons-material/Storage'
 import DownloadIcon from '@mui/icons-material/Download'
+import InfoIcon from '@mui/icons-material/Info'
 import { alpineApi } from '../api'
 import type { AlpinePackage, AlpineCacheStats } from '../types'
 
@@ -163,6 +164,54 @@ export default function AlpinePage() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Usage Info */}
+      <Paper sx={{ p: 2, mb: 2, bgcolor: 'info.light' }}>
+        <Box display="flex" alignItems="flex-start" gap={1}>
+          <InfoIcon color="info" sx={{ mt: 0.5 }} />
+          <Box>
+            <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+              Docker 中使用 Alpine 代理
+            </Typography>
+            <Typography variant="body2" component="div">
+              在 Dockerfile 或 docker run 中替换 Alpine 源：
+              <Box
+                component="pre"
+                sx={{
+                  mt: 1,
+                  p: 1.5,
+                  bgcolor: 'background.paper',
+                  borderRadius: 1,
+                  fontSize: '0.85rem',
+                  overflow: 'auto',
+                }}
+              >
+{`# 方法1: Dockerfile 中替换
+FROM alpine:3.23
+RUN echo 'http://<your-uranus-host>:9817/alpine/v3.23/main' > /etc/apk/repositories \\
+    && echo 'http://<your-uranus-host>:9817/alpine/v3.23/community' >> /etc/apk/repositories \\
+    && apk update \\
+    && apk add --no-cache nodejs npm
+
+# 方法2: docker run 时替换
+ docker run --rm alpine:3.23 sh -c "
+   echo 'http://<your-uranus-host>:9817/alpine/v3.23/main' > /etc/apk/repositories
+   echo 'http://<your-uranus-host>:9817/alpine/v3.23/community' >> /etc/apk/repositories
+   apk update && apk add --no-cache curl wget
+ "
+
+# 方法3: 使用 docker-compose
+services:
+  app:
+    image: alpine:3.23
+    command: sh -c "apk update && apk add nodejs && node -v"
+    volumes:
+      - ./alpine-repositories:/etc/apk/repositories:ro`}
+              </Box>
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
 
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2 }}>
