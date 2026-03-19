@@ -166,9 +166,9 @@ export default function AlpinePage() {
       </Grid>
 
       {/* Usage Info */}
-      <Paper sx={{ p: 2, mb: 2, bgcolor: 'info.light' }}>
+      <Paper sx={{ p: 2, mb: 2, backgroundColor: 'rgba(17, 153, 142, 0.1)', border: '1px solid rgba(17, 153, 142, 0.2)' }}>
         <Box display="flex" alignItems="flex-start" gap={1}>
-          <InfoIcon color="info" sx={{ mt: 0.5 }} />
+          <InfoIcon sx={{ mt: 0.5, color: '#11998e' }} />
           <Box>
             <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
               Docker 中使用 Alpine 代理
