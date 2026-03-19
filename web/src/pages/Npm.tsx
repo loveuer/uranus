@@ -254,7 +254,7 @@ export default function NpmPage() {
         </Box>
       </Box>
 
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer component={Paper} variant="outlined" sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)' }}>
         <Table size="small">
           <TableHead>
             <TableRow>

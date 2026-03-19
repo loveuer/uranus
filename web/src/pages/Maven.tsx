@@ -64,7 +64,7 @@ export default function MavenPage() {
         </Alert>
       )}
 
-      <Card sx={{ mb: 2 }}>
+      <Card sx={{ mb: 2, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField

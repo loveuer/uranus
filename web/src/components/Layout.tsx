@@ -95,7 +95,16 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <Box display="flex">
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar
+        position="fixed"
+        sx={{
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          background: 'rgba(255,255,255,0.72)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(255,255,255,0.6)'
+        }}
+      >
         <Toolbar>
           <Typography variant="h6" fontWeight="bold" sx={{ flexGrow: 1 }}>
             Uranus
@@ -117,7 +126,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Avatar sx={{ width: 32, height: 32, mr: 1, bgcolor: 'primary.light' }}>
               <AccountCircleIcon />
             </Avatar>
-            <Typography variant="body2" sx={{ mr: 0.5 }}>
+            <Typography variant="body2" sx={{ mr: 0.5, color: 'rgba(0, 0, 0, 0.7)' }}>
               {user?.username}
             </Typography>
           </Box>
@@ -159,7 +168,14 @@ export default function Layout({ children }: { children: ReactNode }) {
         variant="permanent"
         sx={{
           width: DRAWER_WIDTH,
-          '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
+          '& .MuiDrawer-paper': {
+            width: DRAWER_WIDTH,
+            boxSizing: 'border-box',
+            backgroundColor: 'rgba(255,255,255,0.72)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            borderRight: '1px solid rgba(255,255,255,0.6)'
+          },
         }}
       >
         <Toolbar />

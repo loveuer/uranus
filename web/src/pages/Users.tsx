@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, OutlinedInput, Select, Switch,
-  TextField, Tooltip, Typography,
+  TextField, Tooltip, Typography, Paper
 } from '@mui/material'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import AddIcon from '@mui/icons-material/Add'
@@ -155,18 +155,22 @@ export default function UsersPage() {
           New User
         </Button>
       </Box>
-      <DataGrid
-        rows={users}
-        columns={columns}
-        loading={loading}
-        rowCount={total}
-        pageSizeOptions={[20]}
-        paginationModel={{ page, pageSize: 20 }}
-        paginationMode="server"
-        onPaginationModelChange={(m) => setPage(m.page)}
-        autoHeight
-        disableRowSelectionOnClick
-      />
+      {/* Glassy container for the data grid: wrap with Paper to avoid applying backdropFilter directly to DataGrid */}
+      <Paper variant="outlined" sx={{ p: 1, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
+        <DataGrid
+          rows={users}
+          columns={columns}
+          loading={loading}
+          rowCount={total}
+          pageSizeOptions={[20]}
+          paginationModel={{ page, pageSize: 20 }}
+          paginationMode="server"
+          onPaginationModelChange={(m) => setPage(m.page)}
+          autoHeight
+          sx={{ backgroundColor: 'transparent' }}
+          disableRowSelectionOnClick
+        />
+      </Paper>
 
       {/* 新建对话框 */}
       <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setCreateError('') }} maxWidth="xs" fullWidth>

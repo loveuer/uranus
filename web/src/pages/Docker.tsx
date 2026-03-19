@@ -145,7 +145,7 @@ export default function DockerPage() {
       <Grid container spacing={3}>
         {/* Registry URL */}
         <Grid size={{ xs: 12 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>Registry URL</Typography>
               <Paper
@@ -180,7 +180,7 @@ export default function DockerPage() {
 
         {/* Cache Stats */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">Cache Statistics</Typography>

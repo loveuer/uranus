@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent,
-  DialogTitle, IconButton, LinearProgress, Tooltip, Typography,
+  DialogTitle, IconButton, LinearProgress, Tooltip, Typography, Paper
 } from '@mui/material'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import UploadIcon from '@mui/icons-material/Upload'
@@ -132,13 +132,17 @@ export default function FilesPage() {
 
       {uploading && <LinearProgress variant="determinate" value={uploadProgress} sx={{ mb: 1 }} />}
 
-      <DataGrid
-        rows={files}
-        columns={columns}
-        loading={loading}
-        autoHeight
-        disableRowSelectionOnClick
-      />
+      {/* Use a Paper wrapper to achieve a glass-like surface for the grid, instead of applying backdropFilter directly on DataGrid */}
+      <Paper variant="outlined" sx={{ p: 1, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
+        <DataGrid
+          rows={files}
+          columns={columns}
+          loading={loading}
+          autoHeight
+          sx={{ backgroundColor: 'transparent' }}
+          disableRowSelectionOnClick
+        />
+      </Paper>
 
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete File</DialogTitle>

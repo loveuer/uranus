@@ -120,7 +120,7 @@ export default function AlpinePage() {
       {/* Stats Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Box display="flex" alignItems="center" gap={1}>
                 <StorageIcon color="primary" />
@@ -131,7 +131,7 @@ export default function AlpinePage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Box display="flex" alignItems="center" gap={1}>
                 <DownloadIcon color="primary" />
@@ -142,7 +142,7 @@ export default function AlpinePage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Box display="flex" alignItems="center" gap={1}>
                 <StorageIcon color="success" />
@@ -153,7 +153,7 @@ export default function AlpinePage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Box display="flex" alignItems="center" gap={1}>
                 <StorageIcon color="info" />

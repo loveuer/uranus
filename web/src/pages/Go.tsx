@@ -73,6 +73,7 @@ export default function GoPage() {
       <Typography variant="h5" fontWeight="bold" mb={2}>
         Go Module Proxy
       </Typography>
+      
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -83,7 +84,7 @@ export default function GoPage() {
       <Grid container spacing={3}>
         {/* 代理地址卡片 */}
         <Grid size={{ xs: 12 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Proxy URL
@@ -137,7 +138,7 @@ export default function GoPage() {
 
         {/* 缓存统计 */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">Cache Statistics</Typography>
@@ -214,7 +215,7 @@ export default function GoPage() {
 
         {/* 使用说明 */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Usage Guide

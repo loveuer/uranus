@@ -267,7 +267,7 @@ export default function SettingsPage() {
     <Box>
       <Typography variant="h6" fontWeight="medium" mb={3}>Settings</Typography>
 
-      <Paper variant="outlined" sx={{ display: 'flex', minHeight: 320 }}>
+      <Paper variant="outlined" sx={{ display: 'flex', minHeight: 320, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
         {/* 左侧 Tab 列表 */}
         <Tabs
           orientation="vertical"
@@ -355,12 +355,13 @@ export default function SettingsPage() {
                 />
               ))}
 
-              <Box mt="auto" pt={1}>
+              <Box mt="auto" pt={2}>
                 <Button
                   variant="contained"
-                  size="small"
+                  size="medium"
                   onClick={() => handleSave(idx)}
                   disabled={st.saving}
+                  sx={{ px: 4, py: 1 }}
                 >
                   {st.saving ? 'Saving…' : 'Save'}
                 </Button>

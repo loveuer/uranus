@@ -48,8 +48,10 @@ const StyledCard = styled(Card)({
   maxWidth: '90vw',
   borderRadius: 16,
   boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-  backdropFilter: 'blur(10px)',
-  background: 'rgba(255, 255, 255, 0.95)',
+  // Glass surface styling
+  backdropFilter: 'blur(8px)',
+  background: 'rgba(255, 255, 255, 0.72)',
+  border: '1px solid rgba(255,255,255,0.85)',
   position: 'relative',
   zIndex: 1,
 })
@@ -136,13 +138,32 @@ export default function LoginPage() {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <AccountCircleIcon color="action" />
+                    <AccountCircleIcon sx={{ color: 'rgba(17, 153, 142, 0.6)' }} />
                   </InputAdornment>
                 ),
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 3,
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  transition: 'all 0.2s ease',
+                  '& fieldset': {
+                    borderColor: 'rgba(17, 153, 142, 0.2)',
+                    borderWidth: 1.5,
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(17, 153, 142, 0.4)',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#11998e',
+                    borderWidth: 2,
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: 'rgba(0, 0, 0, 0.5)',
+                  '&.Mui-focused': {
+                    color: '#11998e',
+                  },
                 },
               }}
             />
@@ -156,12 +177,23 @@ export default function LoginPage() {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockIcon color="action" />
+                    <LockIcon sx={{ color: 'rgba(17, 153, 142, 0.6)' }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={toggleShowPassword} edge="end" size="small">
+                    <IconButton
+                      onClick={toggleShowPassword}
+                      edge="end"
+                      size="small"
+                      sx={{
+                        color: 'rgba(17, 153, 142, 0.6)',
+                        '&:hover': {
+                          color: '#11998e',
+                          backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                        },
+                      }}
+                    >
                       {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
                     </IconButton>
                   </InputAdornment>
@@ -169,7 +201,26 @@ export default function LoginPage() {
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 3,
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  transition: 'all 0.2s ease',
+                  '& fieldset': {
+                    borderColor: 'rgba(17, 153, 142, 0.2)',
+                    borderWidth: 1.5,
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(17, 153, 142, 0.4)',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#11998e',
+                    borderWidth: 2,
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: 'rgba(0, 0, 0, 0.5)',
+                  '&.Mui-focused': {
+                    color: '#11998e',
+                  },
                 },
               }}
             />
