@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"os"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -224,24 +226,90 @@ func (s *Service) ListTagsForRepo(ctx context.Context, name string) ([]TagInfo, 
 }
 
 // DeleteRepository 删除仓库及其所有关联数据
+// 使用引用计数机制，只删除未被其他仓库引用的 blob
 func (s *Service) DeleteRepository(ctx context.Context, id uint) error {
 	var repo model.OciRepository
 	if err := s.db.WithContext(ctx).First(&repo, id).Error; err != nil {
 		return ErrRepoNotFound
 	}
 
-	// 删除关联的 blob 文件
-	var blobs []model.OciBlob
-	s.db.WithContext(ctx).Where("repository_id = ?", id).Find(&blobs)
-	for _, b := range blobs {
-		os.Remove(s.blobPath(b.Digest))
-	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 获取该仓库的所有 manifest
+		var manifests []model.OciManifest
+		if err := tx.Where("repository_id = ?", id).Find(&manifests).Error; err != nil {
+			return err
+		}
 
-	// 删除 DB 记录
-	s.db.WithContext(ctx).Where("repository_id = ?", id).Delete(&model.OciBlob{})
-	s.db.WithContext(ctx).Where("repository_id = ?", id).Delete(&model.OciManifest{})
-	s.db.WithContext(ctx).Where("repository_id = ?", id).Delete(&model.OciTag{})
-	return s.db.WithContext(ctx).Delete(&repo).Error
+		// 2. 获取该仓库的所有 blob（用于后续可能的删除）
+		var blobs []model.OciBlob
+		if err := tx.Where("repository_id = ?", id).Find(&blobs).Error; err != nil {
+			return err
+		}
+
+		// 3. 对每个 manifest，递减其 blob 的引用计数
+		for _, m := range manifests {
+			var links []model.OciManifestBlob
+			if err := tx.Where("manifest_id = ?", m.ID).Find(&links).Error; err != nil {
+				return err
+			}
+			for _, l := range links {
+				if err := tx.Model(&model.OciBlob{}).Where("id = ?", l.BlobID).
+					UpdateColumn("ref_count", gorm.Expr("ref_count - ?", 1)).Error; err != nil {
+					return err
+				}
+			}
+			// 删除 manifest-blob 关联
+			if err := tx.Where("manifest_id = ?", m.ID).Delete(&model.OciManifestBlob{}).Error; err != nil {
+				return err
+			}
+		}
+
+		// 4. 删除 DB 记录
+		if err := tx.Where("repository_id = ?", id).Delete(&model.OciTag{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("repository_id = ?", id).Delete(&model.OciManifest{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&repo).Error; err != nil {
+			return err
+		}
+
+		// 5. 检查并标记需要删除的 blob（ref_count == 0 的）
+		// 注意：不立即删除，让 GC 任务处理
+		for _, b := range blobs {
+			var currentBlob model.OciBlob
+			if err := tx.Where("id = ?", b.ID).First(&currentBlob).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					continue
+				}
+				return err
+			}
+			if currentBlob.RefCount <= 0 {
+				// 标记为软删除
+				now := time.Now()
+				if err := tx.Model(&currentBlob).Update("deleted_at", now).Error; err != nil {
+					log.Printf("[oci] failed to mark blob %s for gc: %v", b.Digest, err)
+				}
+				// 添加到 GC 候选表
+				candidate := model.GcCandidate{
+					BlobID:         b.ID,
+					Digest:         b.Digest,
+					Size:           b.Size,
+					Reason:         "repository_deleted",
+					RepositoryID:   id,
+					RepositoryName: repo.Name,
+					CreatedAt:      now,
+				}
+				if err := tx.Create(&candidate).Error; err != nil {
+					// 忽略重复错误
+					log.Printf("[oci] failed to create gc candidate for blob %s: %v", b.Digest, err)
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetStats 获取缓存统计

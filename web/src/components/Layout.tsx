@@ -14,6 +14,7 @@ import ViewModuleIcon from '@mui/icons-material/ViewModule'
 import StorageIcon from '@mui/icons-material/Storage'
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload'
 import SettingsIcon from '@mui/icons-material/Settings'
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep'
 import AccountCircleIcon from '@mui/icons-material/AccountCircle'
 import MavenIcon from '@mui/icons-material/AccountTree'
 import PackageIcon from '@mui/icons-material/Extension'
@@ -30,6 +31,7 @@ const navItems = [
   { label: 'Maven', path: '/maven', icon: <MavenIcon /> },
   { label: 'PyPI', path: '/pypi', icon: <PackageIcon /> },
   { label: 'Alpine', path: '/alpine', icon: <StorageIcon /> },
+  { label: 'GC', path: '/gc', icon: <DeleteSweepIcon /> },
   { label: 'Users', path: '/users', icon: <PeopleIcon /> },
   { label: 'Settings', path: '/settings', icon: <SettingsIcon /> },
 ]

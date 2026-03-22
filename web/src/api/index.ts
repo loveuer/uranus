@@ -1,5 +1,5 @@
 import http from './http'
-import type { ApiResponse, LoginResponse, PageData, User, NpmPackage, NpmVersion, GoCacheStats, OciRepository, OciTagInfo, OciCacheStats, MavenArtifact, MavenRepository, MavenRepositoryConfig, PyPIPackage, AlpinePackage, AlpineCacheStats } from '../types'
+import type { ApiResponse, LoginResponse, PageData, User, NpmPackage, NpmVersion, GoCacheStats, OciRepository, OciTagInfo, OciCacheStats, MavenArtifact, MavenRepository, MavenRepositoryConfig, PyPIPackage, AlpinePackage, AlpineCacheStats, GcStatus, GcCandidate, GcResult, GcUnreferencedBlobs } from '../types'
 
 // 认证
 export const authApi = {
@@ -110,4 +110,16 @@ export const alpineApi = {
     http.post<ApiResponse<null>>('/api/v1/alpine/sync', null, { params: { branch, repo, arch } }),
   cleanCache: () =>
     http.delete<ApiResponse<null>>('/api/v1/alpine/cache'),
+}
+
+// OCI GC 管理
+export const gcApi = {
+  run: () => http.post<ApiResponse<null>>('/api/v1/gc/run'),
+  dryRun: () => http.post<ApiResponse<GcResult>>('/api/v1/gc/dry-run'),
+  runWithDetail: () => http.post<ApiResponse<GcResult>>('/api/v1/gc/run-detail'),
+  getStatus: (limit = 10) => http.get<ApiResponse<GcStatus[]>>('/api/v1/gc/status', { params: { limit } }),
+  getCandidates: () => http.get<ApiResponse<GcCandidate[]>>('/api/v1/gc/candidates'),
+  restore: (id: number) => http.post<ApiResponse<null>>(`/api/v1/gc/restore?id=${id}`),
+  getAutoStatus: () => http.get<ApiResponse<{ running: boolean }>>('/api/v1/gc/auto-status'),
+  getUnreferenced: () => http.get<ApiResponse<GcUnreferencedBlobs>>('/api/v1/gc/unreferenced'),
 }

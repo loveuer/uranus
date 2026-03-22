@@ -55,11 +55,26 @@ func (OciManifest) TableName() string { return "oci_manifests" }
 type OciBlob struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at" gorm:"index"` // 软删除时间，用于 GC 延迟删除
 
 	RepositoryID uint   `json:"repository_id" gorm:"index;not null"`
 	Digest       string `json:"digest" gorm:"uniqueIndex;size:128;not null"` // sha256:...
 	Size         int64  `json:"size"`
 	Cached       bool   `json:"cached" gorm:"default:false"` // 文件是否在磁盘上
+	RefCount     int64  `json:"ref_count" gorm:"default:0"`  // 引用计数
 }
 
 func (OciBlob) TableName() string { return "oci_blobs" }
+
+// OciManifestBlob 记录 manifest 引用的 blob 关系
+type OciManifestBlob struct {
+	ID        uint `gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	ManifestID uint `json:"manifest_id" gorm:"index:idx_manifest_blob,unique;not null"`
+	BlobID     uint `json:"blob_id" gorm:"index:idx_manifest_blob,unique;not null"`
+}
+
+func (OciManifestBlob) TableName() string { return "oci_manifest_blobs" }

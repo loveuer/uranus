@@ -207,7 +207,7 @@ func run(cfg *config.Config) error {
 
 	// ── 主端口 ────────────────────────────────────────────────────────────────
 
-	router := api.NewRouter(authService, userService, fileService, npmService, ociService, mavenService, pypiService, settingService, web.FS(), cfg.Data)
+	router := api.NewRouter(db, authService, userService, fileService, npmService, ociService, mavenService, pypiService, settingService, web.FS(), cfg.Data)
 
 	appConfig := ursa.Config{BodyLimit: cfg.BodySize}
 	if spaHandler := router.SPAHandler(); spaHandler != nil {

@@ -138,6 +138,30 @@ func (s *Service) PushManifest(ctx context.Context, name, reference, mediaType s
 					}
 				}
 			}
+			// 关联 manifest 与 blob，维护引用计数
+			// 需要确保 mf.ID 已经存在
+			if mf.ID != 0 {
+				// 查找是否已经存在关联
+				var exists model.OciManifestBlob
+				if err := tx.Where("manifest_id = ? AND blob_id = ?", mf.ID, blob.ID).First(&exists).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						if err := tx.Create(&model.OciManifestBlob{
+							ManifestID: mf.ID,
+							BlobID:     blob.ID,
+						}).Error; err != nil {
+							return fmt.Errorf("create manifest-blob link: %w", err)
+						}
+					} else {
+						return fmt.Errorf("check manifest-blob link: %w", err)
+					}
+				}
+				// 引用计数自增
+				if blob.ID != 0 {
+					if err := tx.Model(&blob).UpdateColumn("ref_count", gorm.Expr("ref_count + ?", 1)).Error; err != nil {
+						return fmt.Errorf("increment blob ref_count: %w", err)
+					}
+				}
+			}
 		}
 
 		return nil
@@ -257,9 +281,51 @@ func (s *Service) DeleteManifest(ctx context.Context, name, reference string, us
 		return ErrForbidden
 	}
 
+	// 找到要删除的 tag 的 manifest digest
+	var t model.OciTag
+	if err := s.db.Where("repository_id = ? AND tag = ?", repo.ID, reference).First(&t).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrManifestNotFound
+		}
+		return err
+	}
+	manifestDigest := t.ManifestDigest
+
 	// 删除 tag
 	if err := s.db.Where("repository_id = ? AND tag = ?", repo.ID, reference).Delete(&model.OciTag{}).Error; err != nil {
 		return err
+	}
+
+	// 如果没有其他 tag 关联该 manifest，则清理 manifest 的 blob 引用
+	var count int64
+	if err := s.db.Model(&model.OciTag{}).Where("repository_id = ? AND manifest_digest = ?", repo.ID, manifestDigest).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		// 仍有其他 tag 引用，不清理 blob 引用
+		return nil
+	}
+
+	// 查找该 manifest，并清理其 blob 引用关系
+	var manifest model.OciManifest
+	if err := s.db.Where("digest = ?", manifestDigest).First(&manifest).Error; err == nil {
+		// 找到 blob 链接
+		var links []model.OciManifestBlob
+		if err := s.db.Where("manifest_id = ?", manifest.ID).Find(&links).Error; err == nil {
+			// 逐个 blob 的引用数 -1
+			for _, l := range links {
+				_ = s.db.Model(&model.OciBlob{}).Where("id = ?", l.BlobID).
+					UpdateColumn("ref_count", gorm.Expr("ref_count - ?", 1)).Error
+			}
+		}
+		// 删除 manifest-blob 关联
+		if err := s.db.Where("manifest_id = ?", manifest.ID).Delete(&model.OciManifestBlob{}).Error; err != nil {
+			return err
+		}
+		// 删除 manifest 记录
+		if err := s.db.Delete(&manifest).Error; err != nil {
+			return err
+		}
 	}
 
 	return nil

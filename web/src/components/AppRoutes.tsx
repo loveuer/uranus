@@ -10,6 +10,7 @@ import DockerPage from '../pages/Docker'
 import MavenPage from '../pages/Maven'
 import PyPIPage from '../pages/PyPI'
 import AlpinePage from '../pages/Alpine'
+import GCPage from '../pages/GC'
 import SettingsPage from '../pages/Settings'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export default function AppRoutes() {
                 <Route path="maven" element={<MavenPage />} />
                 <Route path="pypi" element={<PyPIPage />} />
                 <Route path="alpine" element={<AlpinePage />} />
+                <Route path="gc" element={<GCPage />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Routes>

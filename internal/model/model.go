@@ -16,6 +16,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&OciTag{},
 		&OciManifest{},
 		&OciBlob{},
+		&OciManifestBlob{},
 		&MavenRepository{},
 		&MavenArtifact{},
 		&MavenArtifactFile{},
@@ -25,5 +26,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&PyPIPackage{},
 		&PyPIVersion{},
 		&PyPIFile{},
+		&GcStatus{},
+		&GcCandidate{},
 	)
 }

@@ -3,9 +3,11 @@ package api
 import (
 	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/loveuer/ursa"
+	"gorm.io/gorm"
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/handler"
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/api/middleware"
@@ -18,6 +20,7 @@ import (
 )
 
 type Router struct {
+	db             *gorm.DB
 	authService    *service.AuthService
 	userService    *service.UserService
 	fileService    *service.FileService
@@ -32,6 +35,7 @@ type Router struct {
 }
 
 func NewRouter(
+	db *gorm.DB,
 	authService *service.AuthService,
 	userService *service.UserService,
 	fileService *service.FileService,
@@ -44,6 +48,7 @@ func NewRouter(
 	dataDir string,
 ) *Router {
 	return &Router{
+		db:             db,
 		authService:    authService,
 		userService:    userService,
 		fileService:    fileService,
@@ -138,6 +143,18 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	ociAdmin.Delete("/repositories/:id", ociHandler.DeleteRepository)
 	ociAdmin.Get("/stats", ociHandler.GetStats)
 	ociAdmin.Delete("/cache", ociHandler.CleanCache)
+
+	// GC 管理接口（供前端使用，需管理员权限）
+	gcHandler := handler.NewGCHandler(r.db, filepath.Join(r.dataDir, "oci"))
+	gcAdmin := api.Group("/gc", middleware.Auth(r.authService), middleware.AdminOnly())
+	gcAdmin.Post("/run", gcHandler.Run)
+	gcAdmin.Post("/dry-run", gcHandler.DryRun)
+	gcAdmin.Post("/run-detail", gcHandler.RunWithDetail)
+	gcAdmin.Get("/status", gcHandler.Status)
+	gcAdmin.Get("/candidates", gcHandler.Candidates)
+	gcAdmin.Post("/restore", gcHandler.Restore)
+	gcAdmin.Get("/auto-status", gcHandler.AutoGCStatus)
+	gcAdmin.Get("/unreferenced", gcHandler.UnreferencedBlobs)
 
 	// Maven 管理接口（供前端使用，需认证）
 	mavenAdmin := api.Group("/maven", middleware.Auth(r.authService))
