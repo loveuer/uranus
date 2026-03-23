@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/loveuer/ursa"
 	"gorm.io/gorm"
@@ -104,6 +105,12 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	mavenHandler   := handler.NewMavenHandler(r.mavenService, r.authService)
 	pypiHandler    := handler.NewPyPIHandler(r.pypiService, r.authService)
 	settingHandler := handler.NewSettingHandler(r.settingService)
+
+	// ── Health Check (/healthz, /readyz) ──────────────────────────────────────
+	// Kubernetes/Docker Compose 探针支持
+	app.Get("/healthz", r.healthz)
+	app.Get("/readyz", r.readyz)
+	app.Get("/health", r.healthz) // 兼容旧版
 
 	// ── REST API (/api/v1) ───────────────────────────────────────────────────
 
@@ -294,12 +301,50 @@ func RegisterPyPIRoutes(app *ursa.App, pypiHandler *handler.PyPIHandler, auth *s
 	// Simple API (PEP 503) - 公开
 	app.Get("/simple/", pypiHandler.GetSimpleIndex)
 	app.Get("/simple/:name/", pypiHandler.GetSimpleIndex)
-	
+
 	// Package downloads - 公开
 	app.Get("/packages/:name/:filename", pypiHandler.GetPackageFile)
-	
+
 	// Upload API (twine upload) - 需认证
 	app.Post("/legacy/", middleware.Auth(auth), pypiHandler.UploadPackage)
+}
+
+// healthz Kubernetes/Docker Compose 存活探针
+// 返回 200 表示服务正在运行
+func (r *Router) healthz(c *ursa.Ctx) error {
+	// 基础健康检查：服务能响应请求即可
+	return c.JSON(ursa.Map{
+		"status":    "healthy",
+		"timestamp": time.Now().Unix(),
+	})
+}
+
+// readyz Kubernetes/Docker Compose 就绪探针
+// 返回 200 表示服务已就绪可以接收流量
+func (r *Router) readyz(c *ursa.Ctx) error {
+	// 就绪检查：验证数据库连接
+	sqlDB, err := r.db.DB()
+	if err != nil {
+		return c.Status(503).JSON(ursa.Map{
+			"status":    "not_ready",
+			"reason":    "database connection error",
+			"timestamp": time.Now().Unix(),
+		})
+	}
+
+	// 执行简单的数据库查询验证连接
+	if err := sqlDB.Ping(); err != nil {
+		return c.Status(503).JSON(ursa.Map{
+			"status":    "not_ready",
+			"reason":    "database ping failed",
+			"timestamp": time.Now().Unix(),
+		})
+	}
+
+	return c.JSON(ursa.Map{
+		"status":    "ready",
+		"timestamp": time.Now().Unix(),
+	})
 }
 
 // RegisterFileRoutes 在 app 上以 prefix 为前缀注册 file-store 路由。
