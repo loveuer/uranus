@@ -49,11 +49,30 @@ func (s *Service) normalizeImageName(name string) string {
 	return name
 }
 
+// isMutableTag 判断 tag 是否是可变的（如 latest）
+func isMutableTag(tag string) bool {
+	// latest 是最常见的可变 tag
+	// 其他常见的可变 tag 如 stable, nightly, dev, main, master 等
+	// 但考虑到用户可能确实需要这些 tag 的更新，我们暂时只处理 latest
+	return tag == "latest"
+}
+
 // ProxyManifest 从上游拉取 manifest 并缓存到 DB
 // reference 可以是 tag 名或 digest
+// 对于固定 tag（非 latest）和 digest 引用，如果本地已有缓存，直接返回本地版本
 func (s *Service) ProxyManifest(ctx context.Context, name, reference string) (content []byte, mediaType, digest string, err error) {
 	name = s.normalizeImageName(name)
 	scope := authScope(name)
+
+	// 对于 digest 引用或固定 tag（非 latest），优先检查本地缓存
+	// digest 是内容寻址，一旦确定永不变，必须走缓存
+	// 固定 tag（如 1.26.2-alpine）通常也不会变，走缓存减少上游压力
+	if isDigest(reference) || !isMutableTag(reference) {
+		if localContent, localMediaType, localDigest, localErr := s.GetManifest(ctx, name, reference); localErr == nil {
+			// 本地有缓存，直接返回
+			return localContent, localMediaType, localDigest, nil
+		}
+	}
 
 	type sfResult struct {
 		content   []byte
