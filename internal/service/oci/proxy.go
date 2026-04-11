@@ -70,8 +70,12 @@ func (s *Service) ProxyManifest(ctx context.Context, name, reference string) (co
 	if isDigest(reference) || !isMutableTag(reference) {
 		if localContent, localMediaType, localDigest, localErr := s.GetManifest(ctx, name, reference); localErr == nil {
 			// 本地有缓存，直接返回
+			log.Printf("[oci] cache hit: %s:%s (digest=%s)", name, reference, localDigest)
 			return localContent, localMediaType, localDigest, nil
 		}
+		log.Printf("[oci] cache miss: %s:%s, will fetch from upstream", name, reference)
+	} else {
+		log.Printf("[oci] mutable tag, skip cache: %s:%s", name, reference)
 	}
 
 	type sfResult struct {
@@ -96,6 +100,8 @@ func (s *Service) fetchManifestFromUpstream(ctx context.Context, name, reference
 	registryHost := s.upstreamRegistryHost()
 	requestURL := fmt.Sprintf("%s/v2/%s/manifests/%s", registryHost, name, reference)
 
+	log.Printf("[oci] upstream request: GET %s", requestURL)
+
 	auth := newUpstreamAuth(s.client)
 	resp, err := auth.doWithAuth(ctx, http.MethodGet, requestURL, scope)
 	if err != nil {
@@ -104,10 +110,12 @@ func (s *Service) fetchManifestFromUpstream(ctx context.Context, name, reference
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
+		log.Printf("[oci] upstream 404: %s:%s", name, reference)
 		return nil, "", "", ErrManifestNotFound
 	}
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[oci] upstream error: %d for %s:%s - %s", resp.StatusCode, name, reference, string(body))
 		return nil, "", "", fmt.Errorf("upstream returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -123,6 +131,8 @@ func (s *Service) fetchManifestFromUpstream(ctx context.Context, name, reference
 	if digest == "" {
 		digest = computeDigest(body)
 	}
+
+	log.Printf("[oci] upstream success: %s:%s (digest=%s, size=%d)", name, reference, digest, len(body))
 
 	// 持久化到 DB
 	if saveErr := s.saveManifest(ctx, name, reference, digest, mediaType, body); saveErr != nil {

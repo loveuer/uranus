@@ -1,7 +1,9 @@
 package oci
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -203,11 +205,21 @@ func TestDeleteManifest_RefCountDecrement(t *testing.T) {
 		// 验证 blob 引用计数已递减为 0
 		verifyBlobRefCounts(t, db, blobIDs, []int64{0, 0, 0})
 
-		// 验证 GC 候选记录未创建（DeleteManifest 不直接创建 GcCandidate）
+		// 验证 blob 已被标记进入 GC
+		for _, blobID := range blobIDs {
+			var blob model.OciBlob
+			if err := db.First(&blob, blobID).Error; err != nil {
+				t.Fatalf("failed to get blob %d: %v", blobID, err)
+			}
+			if blob.DeletedAt == nil {
+				t.Errorf("blob %d should have deleted_at set", blobID)
+			}
+		}
+
 		var candidateCount int64
 		db.Model(&model.GcCandidate{}).Count(&candidateCount)
-		if candidateCount != 0 {
-			t.Errorf("expected 0 gc candidates, got %d", candidateCount)
+		if candidateCount != 3 {
+			t.Errorf("expected 3 gc candidates, got %d", candidateCount)
 		}
 	})
 }
@@ -751,8 +763,207 @@ func TestGC_RestoreCandidate(t *testing.T) {
 	}
 }
 
+func TestPushManifest_DoesNotDoubleCountExistingLinks(t *testing.T) {
+	db := setupTestDB(t)
+	settingSvc := setupTestSettingService(db)
+	svc := NewWithOptions(db, t.TempDir(), settingSvc, GCOptions{
+		SoftDelete:         true,
+		SoftDeleteDelay:    24 * time.Hour,
+		EnableAutoGC:       false,
+		MinUnreferencedAge: 0,
+	})
+
+	adminUser := model.User{Username: "admin", IsAdmin: true}
+	if err := db.Create(&adminUser).Error; err != nil {
+		t.Fatalf("failed to create admin user: %v", err)
+	}
+
+	ctx := context.Background()
+	blobContent := []byte("layer-1")
+	configContent := []byte("config-1")
+
+	layerDigest := "sha256:" + mustSHA256(blobContent)
+	configDigest := "sha256:" + mustSHA256(configContent)
+
+	if err := svc.PushBlob(ctx, layerDigest, bytesReader(blobContent)); err != nil {
+		t.Fatalf("push layer blob failed: %v", err)
+	}
+	if err := svc.PushBlob(ctx, configDigest, bytesReader(configContent)); err != nil {
+		t.Fatalf("push config blob failed: %v", err)
+	}
+
+	manifest := mustJSON(map[string]any{
+		"schemaVersion": 2,
+		"mediaType":     "application/vnd.docker.distribution.manifest.v2+json",
+		"config": map[string]any{
+			"mediaType": "application/vnd.oci.image.config.v1+json",
+			"digest":    configDigest,
+			"size":      len(configContent),
+		},
+		"layers": []map[string]any{
+			{
+				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				"digest":    layerDigest,
+				"size":      len(blobContent),
+			},
+		},
+	})
+
+	for i := 0; i < 2; i++ {
+		if _, err := svc.PushManifest(ctx, "test/repo", "latest", "application/vnd.docker.distribution.manifest.v2+json", []byte(manifest), adminUser.ID, adminUser.Username); err != nil {
+			t.Fatalf("push manifest #%d failed: %v", i+1, err)
+		}
+	}
+
+	var blobs []model.OciBlob
+	if err := db.Order("digest ASC").Find(&blobs).Error; err != nil {
+		t.Fatalf("failed to query blobs: %v", err)
+	}
+	if len(blobs) != 2 {
+		t.Fatalf("expected 2 blobs, got %d", len(blobs))
+	}
+	for _, blob := range blobs {
+		if blob.RefCount != 1 {
+			t.Fatalf("blob %s ref_count expected 1, got %d", blob.Digest, blob.RefCount)
+		}
+	}
+}
+
+func TestPushManifest_ReplacesTagAndReleasesPreviousManifest(t *testing.T) {
+	db := setupTestDB(t)
+	settingSvc := setupTestSettingService(db)
+	svc := NewWithOptions(db, t.TempDir(), settingSvc, GCOptions{
+		SoftDelete:         true,
+		SoftDeleteDelay:    24 * time.Hour,
+		EnableAutoGC:       false,
+		MinUnreferencedAge: 0,
+	})
+
+	adminUser := model.User{Username: "admin", IsAdmin: true}
+	if err := db.Create(&adminUser).Error; err != nil {
+		t.Fatalf("failed to create admin user: %v", err)
+	}
+
+	ctx := context.Background()
+
+	pushManifest := func(layerPayload, configPayload string) string {
+		layerDigest := "sha256:" + mustSHA256([]byte(layerPayload))
+		configDigest := "sha256:" + mustSHA256([]byte(configPayload))
+
+		if err := svc.PushBlob(ctx, layerDigest, bytesReader([]byte(layerPayload))); err != nil {
+			t.Fatalf("push layer blob failed: %v", err)
+		}
+		if err := svc.PushBlob(ctx, configDigest, bytesReader([]byte(configPayload))); err != nil {
+			t.Fatalf("push config blob failed: %v", err)
+		}
+
+		manifest := mustJSON(map[string]any{
+			"schemaVersion": 2,
+			"mediaType":     "application/vnd.docker.distribution.manifest.v2+json",
+			"config": map[string]any{
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"digest":    configDigest,
+				"size":      len(configPayload),
+			},
+			"layers": []map[string]any{
+				{
+					"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+					"digest":    layerDigest,
+					"size":      len(layerPayload),
+				},
+			},
+		})
+
+		digest, err := svc.PushManifest(ctx, "test/repo", "latest", "application/vnd.docker.distribution.manifest.v2+json", []byte(manifest), adminUser.ID, adminUser.Username)
+		if err != nil {
+			t.Fatalf("push manifest failed: %v", err)
+		}
+		return digest
+	}
+
+	firstDigest := pushManifest("layer-a", "config-a")
+	secondDigest := pushManifest("layer-b", "config-b")
+	if firstDigest == secondDigest {
+		t.Fatal("expected different manifest digests after replacing tag")
+	}
+
+	var firstManifest model.OciManifest
+	if err := db.Where("digest = ?", firstDigest).First(&firstManifest).Error; err == nil {
+		t.Fatalf("expected old manifest %s to be removed after tag replacement", firstDigest)
+	}
+
+	var candidates []model.GcCandidate
+	if err := db.Find(&candidates).Error; err != nil {
+		t.Fatalf("failed to query gc candidates: %v", err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("expected 2 gc candidates for replaced manifest blobs, got %d", len(candidates))
+	}
+
+	var activeTag model.OciTag
+	if err := db.Where("tag = ?", "latest").First(&activeTag).Error; err != nil {
+		t.Fatalf("failed to query active tag: %v", err)
+	}
+	if activeTag.ManifestDigest != secondDigest {
+		t.Fatalf("expected latest tag to point to %s, got %s", secondDigest, activeTag.ManifestDigest)
+	}
+}
+
+func TestDeleteManifest_ByDigestRemovesImageAndMarksBlobsForGC(t *testing.T) {
+	db := setupTestDB(t)
+	repoID, manifestID, blobIDs := setupTestData(t, db)
+
+	svc := NewWithOptions(db, t.TempDir(), setupTestSettingService(db), GCOptions{
+		SoftDelete:         true,
+		SoftDeleteDelay:    24 * time.Hour,
+		EnableAutoGC:       false,
+		MinUnreferencedAge: 0,
+	})
+
+	adminUser := model.User{Username: "admin", IsAdmin: true}
+	if err := db.Create(&adminUser).Error; err != nil {
+		t.Fatalf("failed to create admin user: %v", err)
+	}
+
+	if err := svc.DeleteManifest(context.Background(), "test/repo", "sha256:manifest123", adminUser.ID); err != nil {
+		t.Fatalf("delete manifest by digest failed: %v", err)
+	}
+
+	var tagCount int64
+	if err := db.Model(&model.OciTag{}).Where("repository_id = ?", repoID).Count(&tagCount).Error; err != nil {
+		t.Fatalf("failed to count tags: %v", err)
+	}
+	if tagCount != 0 {
+		t.Fatalf("expected tags to be removed, got %d", tagCount)
+	}
+
+	var manifest model.OciManifest
+	if err := db.First(&manifest, manifestID).Error; err == nil {
+		t.Fatal("expected manifest to be deleted")
+	}
+
+	verifyBlobRefCounts(t, db, blobIDs, []int64{0, 0, 0})
+
+	var candidateCount int64
+	if err := db.Model(&model.GcCandidate{}).Count(&candidateCount).Error; err != nil {
+		t.Fatalf("failed to count gc candidates: %v", err)
+	}
+	if candidateCount != 3 {
+		t.Fatalf("expected 3 gc candidates, got %d", candidateCount)
+	}
+}
+
 // Helper function to marshal JSON
 func mustJSON(v interface{}) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func mustSHA256(content []byte) string {
+	sum := sha256.Sum256(content)
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func bytesReader(b []byte) *bytes.Reader {
+	return bytes.NewReader(b)
 }

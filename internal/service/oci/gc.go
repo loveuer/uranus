@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/model"
@@ -37,11 +38,11 @@ type GCOptions struct {
 // DefaultGCOptions 返回默认 GC 配置
 func DefaultGCOptions() GCOptions {
 	return GCOptions{
-		SoftDelete:         true,               // 默认启用软删除
-		SoftDeleteDelay:    24 * time.Hour,     // 默认延迟 24 小时删除
-		EnableAutoGC:       true,               // 默认启用自动 GC
-		AutoGCInterval:     6 * time.Hour,      // 默认每 6 小时运行一次
-		MinUnreferencedAge: 30 * time.Minute,   // 最小无引用时间 30 分钟
+		SoftDelete:         true,             // 默认启用软删除
+		SoftDeleteDelay:    24 * time.Hour,   // 默认延迟 24 小时删除
+		EnableAutoGC:       true,             // 默认启用自动 GC
+		AutoGCInterval:     6 * time.Hour,    // 默认每 6 小时运行一次
+		MinUnreferencedAge: 30 * time.Minute, // 最小无引用时间 30 分钟
 	}
 }
 
@@ -73,10 +74,7 @@ func NewGCServiceWithOptions(db *gorm.DB, dataDir string, opts GCOptions) *GCSer
 
 // blobPath 构造 blob 在磁盘上的路径
 func (g *GCService) blobPath(digest string) string {
-	hash := digest
-	if len(digest) > 7 && digest[:7] == "sha256:" {
-		hash = digest[7:]
-	}
+	hash := strings.TrimPrefix(digest, "sha256:")
 	return filepath.Join(g.dataDir, "blobs", "sha256", hash)
 }
 
@@ -191,25 +189,36 @@ func (g *GCService) MarkForGC(tx *gorm.DB, blobs []model.OciBlob, reason string)
 	now := time.Now()
 
 	for _, b := range blobs {
+		if b.RefCount > 0 {
+			continue
+		}
+
 		// 1. 标记 blob 为软删除状态
-		if err := tx.Model(&b).Update("deleted_at", now).Error; err != nil {
+		if err := tx.Model(&model.OciBlob{}).Where("id = ? AND deleted_at IS NULL", b.ID).Update("deleted_at", now).Error; err != nil {
 			return err
 		}
 
 		// 2. 添加到 GC 候选表（用于审计和恢复）
+		var existing model.GcCandidate
+		err := tx.Where("blob_id = ?", b.ID).First(&existing).Error
+		switch err {
+		case nil:
+			continue
+		case gorm.ErrRecordNotFound:
+		default:
+			return err
+		}
+
 		candidate := model.GcCandidate{
-			BlobID:         b.ID,
-			Digest:         b.Digest,
-			Size:           b.Size,
-			Reason:         reason,
-			RepositoryID:   b.RepositoryID,
-			CreatedAt:      now,
+			BlobID:       b.ID,
+			Digest:       b.Digest,
+			Size:         b.Size,
+			Reason:       reason,
+			RepositoryID: b.RepositoryID,
+			CreatedAt:    now,
 		}
 		if err := tx.Create(&candidate).Error; err != nil {
-			// 忽略重复错误
-			if !isDuplicateError(err) {
-				return err
-			}
+			return err
 		}
 	}
 
@@ -575,34 +584,6 @@ func (g *GCService) RestoreCandidate(candidateID uint) error {
 		// 删除候选记录
 		return tx.Delete(&candidate).Error
 	})
-}
-
-// isDuplicateError 检查是否为重复记录错误
-func isDuplicateError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// GORM 的 duplicate entry 错误通常包含 "duplicate" 关键字
-	return len(err.Error()) > 0 && contains(err.Error(), "duplicate")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))
-}
-
-func containsAt(s, substr string, start int) bool {
-	if start >= len(s) {
-		return false
-	}
-	if start+len(substr) > len(s) {
-		return false
-	}
-	for i := 0; i < len(substr); i++ {
-		if s[start+i] != substr[i] {
-			return containsAt(s, substr, start+1)
-		}
-	}
-	return true
 }
 
 // timePtr 返回一个指向 t 的指针，用于设置 EndedAt 字段
