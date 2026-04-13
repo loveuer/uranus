@@ -1,445 +1,156 @@
 import { useEffect, useState } from 'react'
+import { useOciStore } from '@/stores/oci'
+import { StatsCard } from '@/components/ui/stats-card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DataTable } from '@/components/ui/data-table'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Container, HardDrive, Tag, Download, Trash2, MoreHorizontal, Copy } from 'lucide-react'
+import { formatBytes, formatDate } from '@/lib/utils'
 import {
-  Box, Card, CardContent, Typography, Alert,
-  CircularProgress, Paper, Grid, IconButton, Tooltip, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TablePagination, Collapse, Dialog, DialogActions, DialogContent,
-  DialogContentText, DialogTitle, Button,
-} from '@mui/material'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import DeleteIcon from '@mui/icons-material/Delete'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import SearchIcon from '@mui/icons-material/Search'
-import TextField from '@mui/material/TextField'
-import { ociApi } from '../api'
-import type { OciRepository, OciTagInfo, OciCacheStats } from '../types'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function DockerPage() {
-  const [stats, setStats] = useState<OciCacheStats | null>(null)
-  const [repos, setRepos] = useState<OciRepository[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(20)
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [copied, setCopied] = useState(false)
+  const { fetchRepositories, fetchStats, cleanCache, deleteRepo, repositories, stats, loading, tags } = useOciStore()
+
   const [expandedRepo, setExpandedRepo] = useState<string | null>(null)
-  const [repoTags, setRepoTags] = useState<OciTagInfo[]>([])
-  const [tagsLoading, setTagsLoading] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [cleanDialogOpen, setCleanDialogOpen] = useState(false)
-  const [cleaning, setCleaning] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<number | null>(null)
-
-  const loadStats = async () => {
-    try {
-      const res = await ociApi.getStats()
-      setStats(res.data.data)
-    } catch {
-      // ignore
-    }
-  }
-
-  const loadRepos = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await ociApi.listRepos(page + 1, rowsPerPage, search)
-      setRepos(res.data.data || [])
-      setTotal((res.data as unknown as { total: number }).total || 0)
-    } catch {
-      setError('Failed to load repositories')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
-    loadStats()
-    loadRepos()
+    fetchRepositories()
+    fetchStats()
   }, [])
 
-  useEffect(() => {
-    loadRepos()
-  }, [page, rowsPerPage])
+  const baseUrl = window.location.origin
 
-  const handleSearch = () => {
-    setPage(0)
-    loadRepos()
-  }
-
-  const handleExpandRepo = async (name: string) => {
-    if (expandedRepo === name) {
-      setExpandedRepo(null)
-      return
-    }
-    setExpandedRepo(name)
-    setTagsLoading(true)
-    try {
-      const res = await ociApi.listTags(name)
-      setRepoTags(res.data.data || [])
-    } catch {
-      setRepoTags([])
-    } finally {
-      setTagsLoading(false)
-    }
-  }
-
-  const handleDeleteRepo = async (id: number) => {
-    try {
-      await ociApi.deleteRepo(id)
-      setDeleteDialogOpen(null)
-      loadRepos()
-      loadStats()
-    } catch {
-      setError('Failed to delete repository')
-    }
-  }
-
-  const handleCleanCache = async () => {
-    setCleaning(true)
-    try {
-      await ociApi.cleanCache()
-      await loadStats()
-      await loadRepos()
-      setCleanDialogOpen(false)
-    } catch {
-      setError('Failed to clean cache')
-    } finally {
-      setCleaning(false)
-    }
-  }
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  const getRegistryUrl = () => {
-    return window.location.host
-  }
-
-  const copyText = (text: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  const columns = [
+    {
+      accessorKey: 'name',
+      header: 'Repository',
+    },
+    {
+      accessorKey: 'tag_count',
+      header: 'Tags',
+      cell: (info: any) => <Badge variant="secondary">{info.getValue()}</Badge>,
+    },
+    {
+      accessorKey: 'total_size',
+      header: 'Size',
+      cell: (info: any) => <span className="font-mono text-sm">{formatBytes(info.getValue())}</span>,
+    },
+    {
+      accessorKey: 'updated_at',
+      header: 'Last Push',
+      cell: (info: any) => <span className="text-sm text-muted-foreground">{formatDate(info.getValue())}</span>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }: any) => (
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setExpandedRepo(expandedRepo === row.original.name ? null : row.original.name)}
+          >
+            {expandedRepo === row.original.name ? '−' : '+'}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => navigator.clipboard.writeText(`docker pull ${baseUrl}:5000/${row.original.name}:latest`)}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Pull Command
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setDeleteTarget(row.original); setDeleteDialogOpen(true) }} className="text-destructive">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ]
 
   return (
-    <Box>
-      <Typography variant="h5" fontWeight="bold" mb={2}>
-        Docker Registry
-      </Typography>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Docker</h1>
+          <p className="text-muted-foreground">OCI container image repository</p>
+        </div>
+        <Button variant="outline" onClick={() => setCleanDialogOpen(true)}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Clear Cache
+        </Button>
+      </div>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatsCard title="Repositories" value={repositories.length} icon={<Container />} />
+        <StatsCard title="Total Tags" value={repositories.reduce((acc: number, r: any) => acc + (r.tag_count || 0), 0)} icon={<Tag />} />
+        <StatsCard title="Storage Used" value={formatBytes(stats?.size_bytes || 0)} icon={<HardDrive />} />
+        <StatsCard title="Total Blobs" value={stats?.blob_count || 0} icon={<Download />} />
+      </div>
 
-      <Grid container spacing={3}>
-        {/* Registry URL */}
-        <Grid size={{ xs: 12 }}>
-          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Registry URL</Typography>
-              <Paper
-                variant="outlined"
-                sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: 'grey.50' }}
-              >
-                <Typography variant="body1" fontFamily="monospace" sx={{ wordBreak: 'break-all' }}>
-                  {getRegistryUrl()}
-                </Typography>
-                <Tooltip title={copied ? 'Copied!' : 'Copy'}>
-                  <IconButton onClick={() => copyText(getRegistryUrl())} color={copied ? 'success' : 'default'}>
-                    <ContentCopyIcon />
-                  </IconButton>
-                </Tooltip>
-              </Paper>
-              <Typography variant="body2" color="text.secondary" mt={1}>
-                Configure Docker daemon to use this registry as a mirror
-              </Typography>
-              <Paper
-                variant="outlined"
-                sx={{ p: 1.5, mt: 1, bgcolor: 'grey.900', color: 'grey.100', fontFamily: 'monospace', fontSize: '0.875rem', whiteSpace: 'pre' }}
-              >
-{`# /etc/docker/daemon.json
-{
-  "registry-mirrors": ["http://${getRegistryUrl()}"],
-  "insecure-registries": ["${getRegistryUrl()}"]
-}`}
-              </Paper>
-            </CardContent>
-          </Card>
-        </Grid>
+      <Card className="bg-muted/50">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium">Pull command:</span>
+            <code className="flex-1 font-mono text-sm bg-background px-3 py-1.5 rounded">
+              docker pull {baseUrl}:5000/{'{image}'}:{'{tag}'}
+            </code>
+            <Button size="icon" variant="ghost" onClick={() => navigator.clipboard.writeText(`docker pull ${baseUrl}:5000/{image}:{tag}`)}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Cache Stats */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">Cache Statistics</Typography>
-                <Box>
-                  <Tooltip title="Refresh">
-                    <IconButton onClick={() => { loadStats(); loadRepos() }} size="small">
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Clean Cache">
-                    <IconButton
-                      onClick={() => setCleanDialogOpen(true)}
-                      size="small"
-                      color="error"
-                      disabled={!stats || stats.repo_count === 0}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle>Repositories</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable columns={columns} data={repositories} loading={loading} />
+        </CardContent>
+      </Card>
 
-              {stats ? (
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="body2" color="text.secondary">Repositories</Typography>
-                    <Typography variant="h6">{stats.repo_count}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="body2" color="text.secondary">Tags</Typography>
-                    <Typography variant="h6">{stats.tag_count}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="body2" color="text.secondary">Cached Blobs</Typography>
-                    <Typography variant="h6">{stats.blob_count}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="body2" color="text.secondary">Total Size</Typography>
-                    <Typography variant="h6">{formatBytes(stats.size_bytes)}</Typography>
-                  </Grid>
-                </Grid>
-              ) : (
-                <Typography color="text.secondary">Loading...</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Repository"
+        description={`Are you sure you want to delete ${deleteTarget?.name}? All tags will be removed.`}
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteRepo(deleteTarget.id)
+            setDeleteDialogOpen(false)
+            setDeleteTarget(null)
+          }
+        }}
+        onCancel={() => { setDeleteDialogOpen(false); setDeleteTarget(null) }}
+      />
 
-        {/* Upstream Info */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Upstream</Typography>
-              {stats ? (
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Registry
-                  </Typography>
-                  <Typography variant="body2" fontFamily="monospace" gutterBottom>
-                    {stats.upstream || 'https://registry-1.docker.io'}
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography color="text.secondary">Loading...</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Repository List */}
-        <Grid size={{ xs: 12 }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">Repositories</Typography>
-                <Box display="flex" gap={1} alignItems="center">
-                  <TextField
-                    size="small"
-                    placeholder="Search..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    sx={{ width: 200 }}
-                  />
-                  <IconButton onClick={handleSearch} size="small">
-                    <SearchIcon />
-                  </IconButton>
-                </Box>
-              </Box>
-
-              {loading ? (
-                <Box display="flex" justifyContent="center" py={4}>
-                  <CircularProgress />
-                </Box>
-              ) : repos.length === 0 ? (
-                <Typography color="text.secondary" textAlign="center" py={4}>
-                  No repositories found. Images will appear here after the first docker pull through this proxy.
-                </Typography>
-              ) : (
-                <>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell width={40} />
-                          <TableCell>Repository</TableCell>
-                          <TableCell align="right">Tags</TableCell>
-                          <TableCell align="right">Cached Blobs</TableCell>
-                          <TableCell align="right">Size</TableCell>
-                          <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {repos.map((repo) => (
-                          <>
-                            <TableRow
-                              key={repo.id}
-                              hover
-                              sx={{ cursor: 'pointer' }}
-                              onClick={() => handleExpandRepo(repo.name)}
-                            >
-                              <TableCell>
-                                {expandedRepo === repo.name ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2" fontFamily="monospace" fontWeight="bold">
-                                  {repo.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {repo.upstream}
-                                </Typography>
-                              </TableCell>
-                              <TableCell align="right">{repo.tag_count}</TableCell>
-                              <TableCell align="right">{repo.cached_blob_count}</TableCell>
-                              <TableCell align="right">{formatBytes(repo.total_size)}</TableCell>
-                              <TableCell align="right">
-                                <Tooltip title="Delete">
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={(e) => { e.stopPropagation(); setDeleteDialogOpen(repo.id) }}
-                                  >
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </TableCell>
-                            </TableRow>
-                            <TableRow key={`${repo.id}-tags`}>
-                              <TableCell colSpan={6} sx={{ py: 0, border: expandedRepo === repo.name ? undefined : 'none' }}>
-                                <Collapse in={expandedRepo === repo.name} timeout="auto" unmountOnExit>
-                                  <Box sx={{ py: 2, pl: 4 }}>
-                                    {tagsLoading ? (
-                                      <CircularProgress size={20} />
-                                    ) : repoTags.length === 0 ? (
-                                      <Typography variant="body2" color="text.secondary">No tags</Typography>
-                                    ) : (
-                                      <Table size="small">
-                                        <TableHead>
-                                          <TableRow>
-                                            <TableCell>Tag</TableCell>
-                                            <TableCell>Digest</TableCell>
-                                            <TableCell>Media Type</TableCell>
-                                            <TableCell align="right">Size</TableCell>
-                                            <TableCell>Created</TableCell>
-                                          </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                          {repoTags.map((tag) => (
-                                            <TableRow key={tag.tag}>
-                                              <TableCell>
-                                                <Typography variant="body2" fontFamily="monospace">{tag.tag}</Typography>
-                                              </TableCell>
-                                              <TableCell>
-                                                <Tooltip title={tag.manifest_digest}>
-                                                  <Typography variant="body2" fontFamily="monospace" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {tag.manifest_digest.substring(0, 19)}...
-                                                  </Typography>
-                                                </Tooltip>
-                                              </TableCell>
-                                              <TableCell>
-                                                <Typography variant="caption">
-                                                  {tag.media_type.replace('application/vnd.docker.distribution.', '').replace('application/vnd.oci.image.', 'oci.')}
-                                                </Typography>
-                                              </TableCell>
-                                              <TableCell align="right">{formatBytes(tag.size)}</TableCell>
-                                              <TableCell>
-                                                <Typography variant="caption">
-                                                  {new Date(tag.created_at).toLocaleDateString()}
-                                                </Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          ))}
-                                        </TableBody>
-                                      </Table>
-                                    )}
-
-                                    <Box mt={1}>
-                                      <Typography variant="caption" color="text.secondary">
-                                        Pull: <code style={{ background: '#f5f5f5', padding: '2px 4px', borderRadius: 4 }}>
-                                          docker pull {getRegistryUrl()}/{repo.name}:{'<tag>'}
-                                        </code>
-                                      </Typography>
-                                    </Box>
-                                  </Box>
-                                </Collapse>
-                              </TableCell>
-                            </TableRow>
-                          </>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  <TablePagination
-                    component="div"
-                    count={total}
-                    page={page}
-                    onPageChange={(_, p) => setPage(p)}
-                    rowsPerPage={rowsPerPage}
-                    onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0) }}
-                    rowsPerPageOptions={[10, 20, 50]}
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Clean Cache Dialog */}
-      <Dialog open={cleanDialogOpen} onClose={() => setCleanDialogOpen(false)}>
-        <DialogTitle>Clean Docker Cache</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to clean all cached Docker images? This will remove all repositories, tags, manifests, and blobs. This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCleanDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCleanCache} color="error" disabled={cleaning}>
-            {cleaning ? <CircularProgress size={20} /> : 'Clean All'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Repo Dialog */}
-      <Dialog open={deleteDialogOpen !== null} onClose={() => setDeleteDialogOpen(null)}>
-        <DialogTitle>Delete Repository</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete this repository and all its cached data?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(null)}>Cancel</Button>
-          <Button onClick={() => deleteDialogOpen && handleDeleteRepo(deleteDialogOpen)} color="error">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+      <ConfirmDialog
+        open={cleanDialogOpen}
+        title="Clear Cache"
+        description="This will clear all cached OCI layers. Are you sure?"
+        onConfirm={() => {
+          cleanCache()
+          setCleanDialogOpen(false)
+        }}
+        onCancel={() => setCleanDialogOpen(false)}
+      />
+    </div>
   )
 }

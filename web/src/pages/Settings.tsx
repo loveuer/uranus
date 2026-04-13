@@ -1,375 +1,493 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSettingsStore, useSettings, useSettingsLoading, useSettingsSaving } from '@/stores/settings'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Toast, toast, useToasts, dismissToast } from '@/components/ui/toast'
 import {
-  Box, Button, CircularProgress, TextField, Typography, Alert,
-  Divider, FormControlLabel, Switch, Tab, Tabs, Paper,
-} from '@mui/material'
-import StorageIcon from '@mui/icons-material/Storage'
-import FolderIcon from '@mui/icons-material/Folder'
-import TerminalIcon from '@mui/icons-material/Terminal'
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
-import ExtensionIcon from '@mui/icons-material/Extension'
-import TerrainIcon from '@mui/icons-material/Terrain'
-import { settingApi } from '../api'
-
-interface FieldConfig {
-  key: string
-  label: string
-  hint: string
-  placeholder?: string
-  /** 若指定，此字段始终显示，不受 enabled 控制 */
-  alwaysShow?: boolean
-}
-
-interface ModuleConfig {
-  icon: React.ReactNode
-  title: string
-  /** 标识该模块专用端口是否启用的 setting key */
-  enabledKey: string
-  enabledLabel: string
-  fields: FieldConfig[]
-}
-
-const MODULES: ModuleConfig[] = [
-  {
-    icon: <FolderIcon fontSize="small" />,
-    title: 'File Store',
-    enabledKey: 'file.enabled',
-    enabledLabel: 'Enable dedicated port',
-    fields: [
-      {
-        key: 'file.addr',
-        label: 'Dedicated Listen Address',
-        hint: 'Clients access files directly without the /file-store/ prefix',
-        placeholder: '0.0.0.0:8001',
-      },
-    ],
-  },
-  {
-    icon: <StorageIcon fontSize="small" />,
-    title: 'npm',
-    enabledKey: 'npm.enabled',
-    enabledLabel: 'Enable dedicated port',
-    fields: [
-      {
-        key: 'npm.upstream',
-        label: 'Upstream Registry',
-        hint: 'Proxy target for packages not cached locally',
-        placeholder: 'https://registry.npmmirror.com',
-        alwaysShow: true,
-      },
-      {
-        key: 'npm.addr',
-        label: 'Dedicated Listen Address',
-        hint: 'npm clients point here directly: npm set registry http://host:4873',
-        placeholder: '0.0.0.0:4873',
-      },
-    ],
-  },
-  {
-    icon: <TerminalIcon fontSize="small" />,
-    title: 'Go Modules',
-    enabledKey: 'go.enabled',
-    enabledLabel: 'Enable dedicated port',
-    fields: [
-      {
-        key: 'go.upstream',
-        label: 'Upstream Proxy',
-        hint: 'Go proxy upstream servers, comma separated',
-        placeholder: 'https://goproxy.cn,direct',
-        alwaysShow: true,
-      },
-      {
-        key: 'go.private',
-        label: 'GOPRIVATE',
-        hint: 'Modules that should not use the proxy (e.g., github.com/mycompany/*)',
-        placeholder: 'github.com/mycompany/*',
-        alwaysShow: true,
-      },
-      {
-        key: 'go.addr',
-        label: 'Dedicated Listen Address',
-        hint: 'Go clients point here directly: export GOPROXY=http://host:8081',
-        placeholder: '0.0.0.0:8081',
-      },
-    ],
-  },
-  {
-    icon: <CloudDownloadIcon fontSize="small" />,
-    title: 'Docker',
-    enabledKey: 'oci.enabled',
-    enabledLabel: 'Enable dedicated port',
-    fields: [
-      {
-        key: 'oci.upstream',
-        label: 'Upstream Registry',
-        hint: 'Docker registry upstream for proxy/cache',
-        placeholder: 'https://registry-1.docker.io',
-        alwaysShow: true,
-      },
-      {
-        key: 'oci.http_proxy',
-        label: 'HTTP Proxy',
-        hint: 'HTTP proxy for upstream connections',
-        placeholder: 'http://proxy:8080',
-        alwaysShow: true,
-      },
-      {
-        key: 'oci.https_proxy',
-        label: 'HTTPS Proxy',
-        hint: 'HTTPS proxy for upstream connections',
-        placeholder: 'http://proxy:8080',
-        alwaysShow: true,
-      },
-      {
-        key: 'oci.addr',
-        label: 'Dedicated Listen Address',
-        hint: 'Docker clients point here directly',
-        placeholder: '0.0.0.0:5000',
-      },
-    ],
-  },
-  {
-    icon: <AccountTreeIcon fontSize="small" />,
-    title: 'Maven',
-    enabledKey: 'maven.enabled',
-    enabledLabel: 'Enable dedicated port',
-    fields: [
-      {
-        key: 'maven.upstream',
-        label: 'Upstream Repository',
-        hint: 'Maven repository upstream for proxy/cache',
-        placeholder: 'https://repo.maven.apache.org/maven2',
-        alwaysShow: true,
-      },
-      {
-        key: 'maven.addr',
-        label: 'Dedicated Listen Address',
-        hint: 'Maven clients point here directly',
-        placeholder: '0.0.0.0:8082',
-      },
-    ],
-  },
-  {
-    icon: <ExtensionIcon fontSize="small" />,
-    title: 'PyPI',
-    enabledKey: 'pypi.enabled',
-    enabledLabel: 'Enable dedicated port',
-    fields: [
-      {
-        key: 'pypi.upstream',
-        label: 'Upstream Index',
-        hint: 'PyPI index upstream for proxy/cache',
-        placeholder: 'https://pypi.org',
-        alwaysShow: true,
-      },
-      {
-        key: 'pypi.addr',
-        label: 'Dedicated Listen Address',
-        hint: 'pip clients point here directly',
-        placeholder: '0.0.0.0:8083',
-      },
-    ],
-  },
-  {
-    icon: <TerrainIcon fontSize="small" />,
-    title: 'Alpine',
-    enabledKey: 'alpine.enabled',
-    enabledLabel: 'Enable Alpine APK proxy',
-    fields: [
-      {
-        key: 'alpine.upstream',
-        label: 'Upstream Repository',
-        hint: 'Alpine APK repository upstream for proxy/cache',
-        placeholder: 'https://dl-cdn.alpinelinux.org/alpine',
-        alwaysShow: true,
-      },
-      {
-        key: 'alpine.branches',
-        label: 'Branches',
-        hint: 'Comma separated list of branches to sync (e.g., v3.23,v3.22,edge)',
-        placeholder: 'v3.23,v3.22,v3.21,v3.20,edge',
-        alwaysShow: true,
-      },
-      {
-        key: 'alpine.sync_interval',
-        label: 'Sync Interval (minutes)',
-        hint: 'How often to sync index from upstream',
-        placeholder: '30',
-        alwaysShow: true,
-      },
-      {
-        key: 'alpine.cache_ttl',
-        label: 'Cache TTL (minutes)',
-        hint: 'How long to cache before background refresh',
-        placeholder: '5',
-        alwaysShow: true,
-      },
-    ],
-  },
-]
-
-// 每个模块独立管理保存状态
-interface ModuleStatus {
-  saving: boolean
-  success: boolean
-  error: string
-}
-
-function defaultStatus(): ModuleStatus {
-  return { saving: false, success: false, error: '' }
-}
+  Settings,
+  Package,
+  Hexagon,
+  Container,
+  Box,
+  CircleDot,
+  Mountain,
+  Folder,
+  Database,
+} from 'lucide-react'
+import { ModuleSettingsCard } from '@/components/settings'
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Record<string, string>>({})
-  const [loading, setLoading]   = useState(false)
-  const [tab, setTab]           = useState(0)
-  const [status, setStatus]     = useState<ModuleStatus[]>(MODULES.map(defaultStatus))
+  const { fetchSettings, updateSettings } = useSettingsStore()
+  const settings = useSettings()
+  const loading = useSettingsLoading()
+  const saving = useSettingsSaving()
+  const toasts = useToasts()
 
-  const load = async () => {
-    setLoading(true)
-    try {
-      const res = await settingApi.getAll()
-      setSettings(res.data.data)
-    } finally {
-      setLoading(false)
+  const [activeTab, setActiveTab] = useState('general')
+  const [localSettings, setLocalSettings] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const errorInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  useEffect(() => {
+    fetchSettings()
+  }, [])
+
+  useEffect(() => {
+    setLocalSettings(settings)
+    setErrors({})
+  }, [settings])
+
+  const handleChange = useCallback((key: string, value: string) => {
+    setLocalSettings((prev) => ({ ...prev, [key]: value }))
+    // Clear error when user edits
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }, [])
+
+  // A3: Form validation
+  const validate = useCallback((): Record<string, string> => {
+    const errs: Record<string, string> = {}
+
+    // Validate upstream fields
+    const upstreamKeys = [
+      'npm.upstream', 'go.upstream', 'oci.upstream',
+      'maven.upstream', 'pypi.upstream', 'alpine.upstream',
+    ]
+    for (const key of upstreamKeys) {
+      const val = localSettings[key]
+      if (val && val.trim() && !val.match(/^https?:\/\//i)) {
+        errs[key] = 'Must be a valid URL starting with http:// or https://'
+      }
     }
-  }
 
-  useEffect(() => { load() }, [])
-
-  const set = (key: string, value: string) =>
-    setSettings((prev) => ({ ...prev, [key]: value }))
-
-  const patchStatus = (idx: number, patch: Partial<ModuleStatus>) =>
-    setStatus((prev) => prev.map((s, i) => i === idx ? { ...s, ...patch } : s))
-
-  const handleSave = async (idx: number) => {
-    const mod = MODULES[idx]
-    // 只保存该模块相关的 keys
-    const keys = [mod.enabledKey, ...mod.fields.map((f) => f.key)]
-    const payload = Object.fromEntries(keys.map((k) => [k, settings[k] ?? '']))
-
-    patchStatus(idx, { saving: true, success: false, error: '' })
-    try {
-      await settingApi.update(payload)
-      patchStatus(idx, { saving: false, success: true })
-      setTimeout(() => patchStatus(idx, { success: false }), 3000)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      patchStatus(idx, { saving: false, error: msg || 'Failed to save settings' })
+    // Validate addr fields
+    const addrKeys = ['npm.addr', 'go.addr', 'oci.addr', 'maven.addr', 'pypi.addr', 'file.addr']
+    for (const key of addrKeys) {
+      const val = localSettings[key]
+      if (val && val.trim() && !val.match(/:\d+$/)) {
+        errs[key] = 'Must match format :port or host:port (e.g., :8080)'
+      }
     }
-  }
 
-  if (loading) return <Box display="flex" justifyContent="center" mt={4}><CircularProgress /></Box>
+    // Validate number fields
+    const numberKeys = ['alpine.sync_interval', 'alpine.cache_ttl', 'max_storage_gb']
+    for (const key of numberKeys) {
+      const val = localSettings[key]
+      if (val && val.trim()) {
+        const n = parseInt(val, 10)
+        if (isNaN(n) || n <= 0 || String(n) !== val.trim()) {
+          errs[key] = 'Must be a positive integer'
+        }
+      }
+    }
+
+    return errs
+  }, [localSettings])
+
+  const handleSave = useCallback(async () => {
+    const errs = validate()
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs)
+      // Focus first error field
+      const firstErrorKey = Object.keys(errs)[0]
+      const ref = errorInputRefs.current[firstErrorKey]
+      if (ref) {
+        ref.focus()
+      }
+      return
+    }
+
+    const success = await updateSettings(localSettings)
+    if (success) {
+      toast('Settings saved successfully', 'success')
+    } else {
+      toast('Failed to save settings', 'error')
+    }
+  }, [localSettings, updateSettings, validate])
+
+  // A7: Dirty state tracking
+  const dirtyKeys = Object.keys(localSettings).filter(
+    (key) => localSettings[key] !== settings[key]
+  )
+  const hasDirty = dirtyKeys.length > 0
+
+  const handleReset = useCallback(() => {
+    setLocalSettings(settings)
+    setErrors({})
+  }, [settings])
+
+  // Tab configuration
+  const tabs = [
+    { value: 'general', icon: Settings, label: 'General' },
+    { value: 'npm', icon: Package, label: 'npm' },
+    { value: 'go', icon: Hexagon, label: 'Go' },
+    { value: 'oci', icon: Container, label: 'OCI' },
+    { value: 'maven', icon: Box, label: 'Maven' },
+    { value: 'pypi', icon: CircleDot, label: 'PyPI' },
+    { value: 'alpine', icon: Mountain, label: 'Alpine' },
+    { value: 'file', icon: Folder, label: 'File' },
+    { value: 'storage', icon: Database, label: 'Storage' },
+  ]
+
+  // Helper to register input refs for error focusing
+  const registerInput = useCallback((key: string) => (el: HTMLInputElement | null) => {
+    errorInputRefs.current[key] = el
+  }, [])
+
+  // A4: Storage stats - TODO: Storage stats API pending, using hardcoded placeholder
+  const storageUsedGB = 0
+  const storageMaxGB = parseInt(localSettings.max_storage_gb || '500', 10) || 500
+  const storagePercent = storageMaxGB > 0 ? 0 : 0
 
   return (
-    <Box>
-      <Typography variant="h6" fontWeight="medium" mb={3}>Settings</Typography>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <p className="text-muted-foreground">System configuration</p>
+      </div>
 
-      <Paper variant="outlined" sx={{ display: 'flex', minHeight: 320, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-        {/* 左侧 Tab 列表 */}
-        <Tabs
-          orientation="vertical"
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          sx={{
-            borderRight: 1,
-            borderColor: 'divider',
-            minWidth: 140,
-            pt: 1,
-          }}
-        >
-          {MODULES.map((mod, idx) => (
-            <Tab
-              key={idx}
-              icon={mod.icon as React.ReactElement}
-              iconPosition="start"
-              label={mod.title}
-              sx={{ justifyContent: 'flex-start', minHeight: 48, px: 2, gap: 1 }}
-            />
+      {/* Toast Container */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm px-4">
+          {toasts.map((t) => (
+            <Toast key={t.id} {...t} onDismiss={dismissToast} />
           ))}
-        </Tabs>
+        </div>
+      )}
 
-        {/* 右侧内容区 */}
-        {MODULES.map((mod, idx) => {
-          if (tab !== idx) return null
-          const enabled = settings[mod.enabledKey] === 'true'
-          const st = status[idx]
+      {/* Settings Layout */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex gap-6">
+        <TabsList className="flex flex-col w-[200px] h-auto bg-card items-stretch justify-start">
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value} className="justify-start w-full">
+              <tab.icon className="h-4 w-4 mr-2" />
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-          return (
-            <Box key={idx} flex={1} p={3} display="flex" flexDirection="column" gap={2.5}>
-              {/* 模块标题 */}
-              <Box>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {mod.title} Module
-                </Typography>
-                <Divider sx={{ mt: 1 }} />
-              </Box>
+        <div className="flex-1 space-y-6 pb-24">
+          {/* A8: Loading Skeleton */}
+          {loading ? (
+            <div className="space-y-6">
+              <Skeleton className="h-[400px] w-full rounded-lg" />
+            </div>
+          ) : (
+            <>
+              {/* General Tab */}
+              <TabsContent value="general">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>General Settings</CardTitle>
+                    <CardDescription>Basic server configuration</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="input-server_url">Server URL</Label>
+                      <Input
+                        id="input-server_url"
+                        ref={registerInput('server_url')}
+                        value={localSettings.server_url || ''}
+                        onChange={(e) => handleChange('server_url', e.target.value)}
+                        placeholder="http://localhost:9817"
+                        error={!!errors['server_url']}
+                      />
+                      {errors['server_url'] && (
+                        <p className="text-xs text-destructive">{errors['server_url']}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">Public URL for the server (used in generated links)</p>
+                    </div>
 
-              {/* 状态提示 */}
-              {st.success && (
-                <Alert severity="success" sx={{ py: 0.5 }}>Saved successfully.</Alert>
-              )}
-              {st.error && (
-                <Alert severity="error" sx={{ py: 0.5 }}>{st.error}</Alert>
-              )}
+                    <div className="space-y-2">
+                      <Label htmlFor="input-base_path">Base Path</Label>
+                      <Input
+                        id="input-base_path"
+                        value={localSettings.base_path || ''}
+                        onChange={(e) => handleChange('base_path', e.target.value)}
+                        placeholder="/"
+                      />
+                      <p className="text-xs text-muted-foreground">Optional base path for reverse proxy setups</p>
+                    </div>
 
-              {/* Always-visible fields */}
-              {mod.fields.filter((f) => f.alwaysShow).map((f) => (
-                <TextField
-                  key={f.key}
-                  label={f.label}
-                  helperText={f.hint}
-                  placeholder={f.placeholder}
-                  value={settings[f.key] ?? ''}
-                  onChange={(e) => set(f.key, e.target.value)}
-                  size="small"
-                  fullWidth
+                    <div className="space-y-2">
+                      <Label htmlFor="select-log_level">Log Level</Label>
+                      <Select value={localSettings.log_level || 'info'} onValueChange={(v) => handleChange('log_level', v)}>
+                        <SelectTrigger id="select-log_level">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="debug">Debug</SelectItem>
+                          <SelectItem value="info">Info</SelectItem>
+                          <SelectItem value="warn">Warning</SelectItem>
+                          <SelectItem value="error">Error</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="switch-allow_registration">Allow Registration</Label>
+                        <p className="text-xs text-muted-foreground">Allow new users to register</p>
+                      </div>
+                      <Switch
+                        id="switch-allow_registration"
+                        checked={localSettings.allow_registration === 'true'}
+                        onCheckedChange={(checked) => handleChange('allow_registration', checked ? 'true' : 'false')}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* npm Tab */}
+              <TabsContent value="npm">
+                <ModuleSettingsCard
+                  title="npm Registry Settings"
+                  description="npm package proxy configuration"
+                  enabledKey="npm.enabled"
+                  upstreamKey="npm.upstream"
+                  addrKey="npm.addr"
+                  upstreamPlaceholder="https://registry.npmmirror.com"
+                  addrPlaceholder=":4873"
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
                 />
-              ))}
+              </TabsContent>
 
-              {/* Enable toggle */}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={enabled}
-                    onChange={(e) => set(mod.enabledKey, e.target.checked ? 'true' : 'false')}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="body2">{mod.enabledLabel}</Typography>}
-              />
-
-              {/* Conditional fields (only when enabled) */}
-              {enabled && mod.fields.filter((f) => !f.alwaysShow).map((f) => (
-                <TextField
-                  key={f.key}
-                  label={f.label}
-                  helperText={f.hint}
-                  placeholder={f.placeholder}
-                  value={settings[f.key] ?? ''}
-                  onChange={(e) => set(f.key, e.target.value)}
-                  size="small"
-                  fullWidth
+              {/* Go Tab */}
+              <TabsContent value="go">
+                <ModuleSettingsCard
+                  title="Go Modules Settings"
+                  description="Go module proxy configuration"
+                  enabledKey="go.enabled"
+                  upstreamKey="go.upstream"
+                  addrKey="go.addr"
+                  upstreamPlaceholder="https://goproxy.cn,direct"
+                  addrPlaceholder=":3000"
+                  extraFields={[
+                    {
+                      key: 'go.private',
+                      label: 'Private Modules Pattern',
+                      type: 'text',
+                      placeholder: 'git.example.com/*',
+                      description: 'Private module patterns (comma-separated)',
+                    },
+                  ]}
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
                 />
-              ))}
+              </TabsContent>
 
-              <Box mt="auto" pt={2}>
-                <Button
-                  variant="contained"
-                  size="medium"
-                  onClick={() => handleSave(idx)}
-                  disabled={st.saving}
-                  sx={{ px: 4, py: 1 }}
-                >
-                  {st.saving ? 'Saving…' : 'Save'}
-                </Button>
-              </Box>
-            </Box>
-          )
-        })}
-      </Paper>
-    </Box>
+              {/* OCI Tab */}
+              <TabsContent value="oci">
+                <ModuleSettingsCard
+                  title="OCI/Docker Registry Settings"
+                  description="Docker/OCI image proxy configuration"
+                  enabledKey="oci.enabled"
+                  upstreamKey="oci.upstream"
+                  addrKey="oci.addr"
+                  upstreamPlaceholder="https://registry-1.docker.io"
+                  addrPlaceholder=":5000"
+                  extraFields={[
+                    {
+                      key: 'oci.http_proxy',
+                      label: 'HTTP Proxy',
+                      type: 'url',
+                      placeholder: 'http://proxy.example.com:8080',
+                      description: 'HTTP proxy for OCI requests',
+                    },
+                    {
+                      key: 'oci.https_proxy',
+                      label: 'HTTPS Proxy',
+                      type: 'url',
+                      placeholder: 'http://proxy.example.com:8080',
+                      description: 'HTTPS proxy for OCI requests',
+                    },
+                  ]}
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
+                />
+              </TabsContent>
+
+              {/* Maven Tab */}
+              <TabsContent value="maven">
+                <ModuleSettingsCard
+                  title="Maven Repository Settings"
+                  description="Maven artifact proxy configuration"
+                  enabledKey="maven.enabled"
+                  upstreamKey="maven.upstream"
+                  addrKey="maven.addr"
+                  upstreamPlaceholder="https://repo.maven.apache.org/maven2"
+                  addrPlaceholder=":8081"
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
+                />
+              </TabsContent>
+
+              {/* PyPI Tab */}
+              <TabsContent value="pypi">
+                <ModuleSettingsCard
+                  title="PyPI Settings"
+                  description="Python package proxy configuration"
+                  enabledKey="pypi.enabled"
+                  upstreamKey="pypi.upstream"
+                  addrKey="pypi.addr"
+                  upstreamPlaceholder="https://pypi.org"
+                  addrPlaceholder=":8080"
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
+                />
+              </TabsContent>
+
+              {/* Alpine Tab - Keep as is per constraint */}
+              <TabsContent value="alpine">
+                <ModuleSettingsCard
+                  title="Alpine APK Settings"
+                  description="Alpine Linux package proxy configuration"
+                  enabledKey="alpine.enabled"
+                  upstreamKey="alpine.upstream"
+                  upstreamPlaceholder="https://dl-cdn.alpinelinux.org/alpine"
+                  extraFields={[
+                    {
+                      key: 'alpine.branches',
+                      label: 'Branches',
+                      type: 'text',
+                      placeholder: 'v3.23,v3.22,v3.21,v3.20,edge',
+                      description: 'Alpine branches to sync (comma-separated)',
+                    },
+                    {
+                      key: 'alpine.sync_interval',
+                      label: 'Sync Interval (minutes)',
+                      type: 'number',
+                      placeholder: '30',
+                      description: 'Interval for syncing Alpine packages',
+                    },
+                    {
+                      key: 'alpine.cache_ttl',
+                      label: 'Cache TTL (minutes)',
+                      type: 'number',
+                      placeholder: '5',
+                      description: 'Cache TTL for Alpine package metadata',
+                    },
+                  ]}
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
+                />
+              </TabsContent>
+
+              {/* File Tab */}
+              <TabsContent value="file">
+                <ModuleSettingsCard
+                  title="File Storage Settings"
+                  description="File storage service configuration"
+                  enabledKey="file.enabled"
+                  addrKey="file.addr"
+                  addrPlaceholder=":9000"
+                  localSettings={localSettings}
+                  onChange={handleChange}
+                  errors={errors}
+                />
+              </TabsContent>
+
+              {/* Storage Tab */}
+              <TabsContent value="storage">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Storage Configuration</CardTitle>
+                    <CardDescription>File storage settings</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="input-storage_path">Storage Path</Label>
+                      <Input
+                        id="input-storage_path"
+                        ref={registerInput('storage_path')}
+                        value={localSettings.storage_path || './x-data'}
+                        onChange={(e) => handleChange('storage_path', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="input-max_storage_gb">Max Storage Size (GB)</Label>
+                      <Input
+                        id="input-max_storage_gb"
+                        ref={registerInput('max_storage_gb')}
+                        type="number"
+                        value={localSettings.max_storage_gb || '500'}
+                        onChange={(e) => handleChange('max_storage_gb', e.target.value)}
+                        error={!!errors['max_storage_gb']}
+                      />
+                      {errors['max_storage_gb'] && (
+                        <p className="text-xs text-destructive">{errors['max_storage_gb']}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <Label>Current Usage</Label>
+                      {/* TODO: Replace with real storage stats once API is available */}
+                      <div className="flex items-center gap-4">
+                        <Progress value={storagePercent} className="flex-1 h-2" />
+                        <span className="text-sm font-mono text-muted-foreground">
+                          Storage stats API pending
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </>
+          )}
+        </div>
+      </Tabs>
+
+      {/* A1: Unified sticky bottom save bar */}
+      {!loading && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="mx-auto max-w-screen-xl px-6 py-3 flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {hasDirty && (
+                <span className="text-amber-600 font-medium">
+                  {dirtyKeys.length} unsaved change{dirtyKeys.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                disabled={!hasDirty}
+              >
+                Reset
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : hasDirty
+                  ? `Save Changes (${dirtyKeys.length})`
+                  : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

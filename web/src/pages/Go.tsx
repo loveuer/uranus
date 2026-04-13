@@ -1,40 +1,51 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { CodeBlock } from '@/components/ui/code-block'
+import { StatsCard, StatsCardSkeleton } from '@/components/ui/stats-card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Box, Card, CardContent, Typography, Alert,
-  CircularProgress, Paper, Grid, IconButton, Tooltip,
-  Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-  Button,
-} from '@mui/material'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import DeleteIcon from '@mui/icons-material/Delete'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import { goApi } from '../api'
-import type { GoCacheStats } from '../types'
+  Hexagon,
+  Trash2,
+  RefreshCw,
+  Copy,
+  HardDrive,
+  FolderOpen,
+  Server,
+  Check,
+} from 'lucide-react'
+import { goApi } from '@/api'
+import type { GoCacheStats } from '@/types'
+import { formatBytes } from '@/lib/utils'
+import { toast } from '@/stores/ui'
 
 export default function GoPage() {
   const [stats, setStats] = useState<GoCacheStats | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [cleanDialogOpen, setCleanDialogOpen] = useState(false)
   const [cleaning, setCleaning] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     setLoading(true)
-    setError('')
     try {
       const res = await goApi.getStats()
       setStats(res.data.data)
-    } catch (err: unknown) {
-      setError('Failed to load cache stats')
+    } catch {
+      toast.error('Failed to load cache stats')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadStats()
-  }, [])
+  }, [loadStats])
 
   const handleCleanCache = async () => {
     setCleaning(true)
@@ -42,19 +53,12 @@ export default function GoPage() {
       await goApi.cleanCache()
       await loadStats()
       setCleanDialogOpen(false)
-    } catch (err: unknown) {
-      setError('Failed to clean cache')
+      toast.success('Cache cleaned successfully')
+    } catch {
+      toast.error('Failed to clean cache')
     } finally {
       setCleaning(false)
     }
-  }
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   const getProxyUrl = () => {
@@ -63,243 +67,140 @@ export default function GoPage() {
   }
 
   const copyProxyUrl = () => {
-    navigator.clipboard.writeText(getProxyUrl())
+    navigator.clipboard.writeText(`export GOPROXY=${getProxyUrl()}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   return (
-    <Box>
-      <Typography variant="h5" fontWeight="bold" mb={2}>
-        Go Module Proxy
-      </Typography>
-      
+    <div>
+      <PageHeader
+        title="Go Module Proxy"
+        description="Go module proxy cache statistics"
+        breadcrumb={[
+          { label: 'Dashboard', path: '/' },
+          { label: 'Go' },
+        ]}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={loadStats} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCleanDialogOpen(true)}
+              disabled={!stats || stats.file_count === 0}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clean Cache
+            </Button>
+          </div>
+        }
+      />
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+      {/* Proxy URL Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Proxy URL</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between p-3 bg-muted rounded-md mb-3">
+            <span className="font-mono text-sm">{getProxyUrl()}</span>
+            <Button variant="ghost" size="icon" onClick={copyProxyUrl}>
+              {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Set this URL as your <code className="bg-muted px-1.5 py-0.5 rounded text-xs">GOPROXY</code> environment variable
+          </p>
+          <CodeBlock
+            code={`export GOPROXY=${getProxyUrl()}`}
+            language="bash"
+          />
+        </CardContent>
+      </Card>
 
-      <Grid container spacing={3}>
-        {/* 代理地址卡片 */}
-        <Grid size={{ xs: 12 }}>
-          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Proxy URL
-              </Typography>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  bgcolor: 'grey.50',
-                }}
-              >
-                <Typography
-                  variant="body1"
-                  fontFamily="monospace"
-                  sx={{ wordBreak: 'break-all' }}
-                >
-                  {getProxyUrl()}
-                </Typography>
-                <Tooltip title={copied ? 'Copied!' : 'Copy URL'}>
-                  <IconButton onClick={copyProxyUrl} color={copied ? 'success' : 'default'}>
-                    <ContentCopyIcon />
-                  </IconButton>
-                </Tooltip>
-              </Paper>
-              <Typography variant="body2" color="text.secondary" mt={1}>
-                Set this URL as your{' '}
-                <code style={{ background: '#f5f5f5', padding: '2px 4px', borderRadius: 4 }}>
-                  GOPROXY
-                </code>{' '}
-                environment variable
-              </Typography>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 1.5,
-                  mt: 1,
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                }}
-              >
-                export GOPROXY={getProxyUrl()}
-              </Paper>
-            </CardContent>
-          </Card>
-        </Grid>
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+        {loading ? (
+          <>
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+          </>
+        ) : stats ? (
+          <>
+            <StatsCard
+              title="Cache Size"
+              value={formatBytes(stats.size_bytes)}
+              icon={<HardDrive className="h-4 w-4" />}
+            />
+            <StatsCard
+              title="Files Cached"
+              value={stats.file_count}
+              icon={<FolderOpen className="h-4 w-4" />}
+            />
+            <StatsCard
+              title="Cache Directory"
+              value={stats.cache_dir.split('/').pop() || stats.cache_dir}
+              description={stats.cache_dir}
+              icon={<Server className="h-4 w-4" />}
+            />
+            <StatsCard
+              title="Upstream"
+              value={stats.upstream || 'proxy.cn'}
+              description="Default upstream proxy"
+              icon={<Hexagon className="h-4 w-4" />}
+            />
+          </>
+        ) : (
+          <>
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+          </>
+        )}
+      </div>
 
-        {/* 缓存统计 */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">Cache Statistics</Typography>
-                <Box>
-                  <Tooltip title="Refresh">
-                    <IconButton onClick={loadStats} disabled={loading} size="small">
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Clean Cache">
-                    <IconButton
-                      onClick={() => setCleanDialogOpen(true)}
-                      disabled={loading || !stats || stats.file_count === 0}
-                      size="small"
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
+      {/* Usage Guide */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Usage Guide</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-sm font-medium mb-2">1. Configure Go to use this proxy</p>
+            <CodeBlock code={`go env -w GOPROXY=${getProxyUrl()}`} language="bash" />
+          </div>
+          <Separator />
+          <div>
+            <p className="text-sm font-medium mb-2">2. Or set environment variable temporarily</p>
+            <CodeBlock code={`export GOPROXY=${getProxyUrl()}`} language="bash" />
+          </div>
+          <Separator />
+          <div>
+            <p className="text-sm font-medium mb-2">3. For private modules, also set GOPRIVATE</p>
+            <CodeBlock code="go env -w GOPRIVATE=github.com/mycompany/*" language="bash" />
+          </div>
+        </CardContent>
+      </Card>
 
-              {loading ? (
-                <Box display="flex" justifyContent="center" py={4}>
-                  <CircularProgress />
-                </Box>
-              ) : stats ? (
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Cache Size
-                    </Typography>
-                    <Typography variant="h6">{formatBytes(stats.size_bytes)}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Files Cached
-                    </Typography>
-                    <Typography variant="h6">{stats.file_count}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Cache Directory
-                    </Typography>
-                    <Typography variant="body2" fontFamily="monospace">
-                      {stats.cache_dir}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Upstream
-                    </Typography>
-                    <Typography variant="body2" fontFamily="monospace">
-                      {stats.upstream || 'https://goproxy.cn,direct'}
-                    </Typography>
-                  </Grid>
-                  {stats.goprivate && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        GOPRIVATE
-                      </Typography>
-                      <Typography variant="body2" fontFamily="monospace">
-                        {stats.goprivate}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              ) : (
-                <Typography color="text.secondary">No cache data available</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 使用说明 */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Usage Guide
-              </Typography>
-
-              <Box display="flex" flexDirection="column" gap={2}>
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    1. Configure Go to use this proxy
-                  </Typography>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      bgcolor: 'grey.900',
-                      color: 'grey.100',
-                      fontFamily: 'monospace',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    go env -w GOPROXY={getProxyUrl()}
-                  </Paper>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    2. Or set environment variable temporarily
-                  </Typography>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      bgcolor: 'grey.900',
-                      color: 'grey.100',
-                      fontFamily: 'monospace',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    export GOPROXY={getProxyUrl()}
-                  </Paper>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    3. For private modules, also set GOPRIVATE
-                  </Typography>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      bgcolor: 'grey.900',
-                      color: 'grey.100',
-                      fontFamily: 'monospace',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    go env -w GOPRIVATE=github.com/mycompany/*
-                  </Paper>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* 清理缓存确认对话框 */}
-      <Dialog open={cleanDialogOpen} onClose={() => setCleanDialogOpen(false)}>
-        <DialogTitle>Clean Cache</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to clean all cached Go modules? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCleanDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleCleanCache}
-            color="error"
-            disabled={cleaning}
-          >
-            {cleaning ? <CircularProgress size={20} /> : 'Clean'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+      {/* Clean cache confirmation */}
+      <ConfirmDialog
+        open={cleanDialogOpen}
+        title="Clean Cache"
+        description="Are you sure you want to clean all cached Go modules? This action cannot be undone."
+        confirmText="Clean"
+        cancelText="Cancel"
+        variant="destructive"
+        loading={cleaning}
+        onConfirm={handleCleanCache}
+        onCancel={() => setCleanDialogOpen(false)}
+      />
+    </div>
   )
 }

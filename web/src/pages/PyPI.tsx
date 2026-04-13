@@ -1,378 +1,204 @@
 import { useEffect, useState } from 'react'
+import { usePyPIStore } from '@/stores/pypi'
+import { StatsCard } from '@/components/ui/stats-card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DataTable } from '@/components/ui/data-table'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
-  Box, Card, CardContent, Typography, Alert,
-  CircularProgress, Paper, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TablePagination, Button, TextField, Chip, Link, Grid, Dialog,
-  DialogTitle, DialogContent, DialogActions, IconButton, Tooltip,
-} from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
-import DeleteIcon from '@mui/icons-material/Delete'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import StorageIcon from '@mui/icons-material/Storage'
-import CloudUploadIcon from '@mui/icons-material/CloudUpload'
-import { pypiApi } from '../api'
-import type { PyPIPackage } from '../types'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { CircleDot, Database, HardDrive, Download, Trash2, Search, MoreHorizontal, Copy, Eye } from 'lucide-react'
+import { formatBytes } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function PyPIPage() {
-  const [packages, setPackages] = useState<PyPIPackage[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(20)
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [stats, setStats] = useState<any>(null)
-  
-  // Delete dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<{ name: string; version?: string } | null>(null)
-  
-  // Upload dialog state
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadSuccess, setUploadSuccess] = useState('')
-  const [uploadError, setUploadError] = useState('')
+  const { fetchPackages, fetchStats, deletePackage, cleanCache, packages, stats, loading, selectedPackage, selectPackage } = usePyPIStore()
 
-  const loadPackages = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await pypiApi.listPackages(page + 1, rowsPerPage)
-      setPackages(res.data.data?.packages || [])
-      setTotal(res.data.data?.total || 0)
-    } catch {
-      setError('Failed to load packages')
-    } finally {
-      setLoading(false)
-    }
-  }
-  
-  const loadStats = async () => {
-    try {
-      const res = await pypiApi.getStats()
-      setStats(res.data.data)
-    } catch {
-      // Ignore stats error
-    }
-  }
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  const [cleanDialogOpen, setCleanDialogOpen] = useState(false)
 
   useEffect(() => {
-    loadPackages()
-    loadStats()
-  }, [page, rowsPerPage])
+    fetchPackages()
+    fetchStats()
+  }, [])
 
-  const handleSearch = () => {
-    setPage(0)
-    loadPackages()
-  }
-  
-  const handleDeleteClick = (name: string, version?: string) => {
-    setDeleteTarget({ name, version })
-    setDeleteDialogOpen(true)
-  }
-  
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return
-    
-    try {
-      if (deleteTarget.version) {
-        await pypiApi.deleteVersion(deleteTarget.name, deleteTarget.version)
-      } else {
-        await pypiApi.deletePackage(deleteTarget.name)
-      }
-      setDeleteDialogOpen(false)
-      setDeleteTarget(null)
-      loadPackages()
-      loadStats()
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete')
-    }
-  }
-  
-  const handleCleanCache = async () => {
-    try {
-      await pypiApi.cleanCache()
-      loadStats()
-      loadPackages()
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to clean cache')
-    }
-  }
-  
-  const handleUploadClick = () => {
-    setUploadDialogOpen(true)
-  }
-  
-  const handleUploadConfirm = async () => {
-    if (!uploadFile) return
-    
-    setUploading(true)
-    setUploadError('')
-    setUploadSuccess('')
-    
-    const formData = new FormData()
-    formData.append('content', uploadFile)
-    
-    try {
-      // Note: This requires implementing the actual upload endpoint
-      // For now, just show a message
-      setUploadSuccess('Upload functionality requires backend implementation')
-      // In production: await http.post('/legacy/', formData)
-    } catch (err: any) {
-      setUploadError(err.response?.data?.message || 'Upload failed')
-    } finally {
-      setUploading(false)
-    }
-  }
+  const baseUrl = window.location.origin
+
+  const columns = [
+    {
+      accessorKey: 'name',
+      header: 'Package',
+    },
+    {
+      accessorKey: 'summary',
+      header: 'Summary',
+      cell: (info: any) => <span className="text-sm text-muted-foreground truncate max-w-[200px]">{info.getValue() || '-'}</span>,
+    },
+    {
+      accessorKey: 'is_uploaded',
+      header: 'Source',
+      cell: (info: any) => <Badge variant={info.getValue() ? "default" : "outline"}>{info.getValue() ? 'Uploaded' : 'Cached'}</Badge>,
+    },
+    {
+      accessorKey: 'author',
+      header: 'Author',
+      cell: (info: any) => <span className="text-sm">{info.getValue() || 'Unknown'}</span>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }: any) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => { selectPackage(row.original.name); setDetailOpen(true) }}>
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(`pip install ${row.original.name}`)}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Install
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { setDeleteTarget(row.original); setDeleteDialogOpen(true) }} className="text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ]
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        PyPI Repository
-      </Typography>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">PyPI</h1>
+          <p className="text-muted-foreground">Python package repository</p>
+        </div>
+        <Button variant="outline" onClick={() => setCleanDialogOpen(true)}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Clear Cache
+        </Button>
+      </div>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
-      
-      {/* Stats Cards */}
-      {stats && (
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid size={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <StorageIcon color="primary" />
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">Packages</Typography>
-                    <Typography variant="h5">{stats.package_count || 0}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid size={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <StorageIcon color="info" />
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">Versions</Typography>
-                    <Typography variant="h5">{stats.version_count || 0}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid size={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <StorageIcon color="success" />
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">Files</Typography>
-                    <Typography variant="h5">{stats.file_count || 0}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid size={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <StorageIcon color="warning" />
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">Size</Typography>
-                    <Typography variant="h5">{((stats.total_size || 0) / 1024 / 1024).toFixed(2)} MB</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatsCard title="Packages" value={packages.length} icon={<CircleDot />} />
+        <StatsCard title="Cached" value={stats?.cached || 0} icon={<Database />} />
+        <StatsCard title="Storage" value={formatBytes(stats?.size || 0)} icon={<HardDrive />} />
+        <StatsCard title="Downloads" value={stats?.downloads || 0} icon={<Download />} />
+      </div>
 
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-            <TextField
-              size="small"
-              label="Search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search packages..."
-              sx={{ minWidth: 200 }}
-            />
-            <Button
-              variant="contained"
-              startIcon={<SearchIcon />}
-              onClick={handleSearch}
-            >
-              Search
-            </Button>
-            <Box sx={{ flexGrow: 1 }} />
-            <Tooltip title="Upload Package">
+      <Card>
+        <CardHeader>
+          <CardTitle>pip Configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Install from this repository</Label>
+            <div className="relative">
+              <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono text-sm overflow-x-auto">
+                pip install --index-url {baseUrl}/simple --trusted-host localhost package-name
+              </pre>
               <Button
-                variant="outlined"
-                startIcon={<CloudUploadIcon />}
-                onClick={handleUploadClick}
+                size="icon"
+                variant="ghost"
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-100"
+                onClick={() => navigator.clipboard.writeText(`pip install --index-url ${baseUrl}/simple --trusted-host localhost package-name`)}
               >
-                Upload
+                <Copy className="h-4 w-4" />
               </Button>
-            </Tooltip>
-            <Tooltip title="Clean Cache">
-              <IconButton onClick={handleCleanCache} color="warning">
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <Paper sx={{ width: '100%', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
-            <TableContainer sx={{ maxHeight: 500 }}>
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Summary</TableCell>
-                    <TableCell>Versions</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {packages.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        No packages found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    packages.map((pkg) => (
-                      <TableRow key={pkg.id} hover>
-                        <TableCell>
-                          <Link href={`/simple/${pkg.name}/`} target="_blank" rel="noopener">
-                            {pkg.name}
-                          </Link>
-                        </TableCell>
-                        <TableCell>{pkg.summary || '-'}</TableCell>
-                        <TableCell>
-                          {pkg.versions && pkg.versions.length > 0 ? (
-                            <Chip 
-                              label={`${pkg.versions.length} version${pkg.versions.length > 1 ? 's' : ''}`} 
-                              size="small" 
-                              variant="outlined"
-                            />
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {pkg.is_uploaded ? (
-                            <Chip label="Uploaded" size="small" color="primary" />
-                          ) : (
-                            <Chip label="Cached" size="small" color="default" />
-                          )}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Delete Package">
-                            <IconButton 
-                              size="small" 
-                              color="error"
-                              onClick={() => handleDeleteClick(pkg.name)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TablePagination
-              component="div"
-              count={total}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10))
-                setPage(0)
-              }}
-              rowsPerPageOptions={[10, 20, 50]}
-            />
-          </>
-        )}
-      </Paper>
-      
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Confirm Deletion</DialogTitle>
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle>Packages</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable columns={columns} data={packages} loading={loading} />
+        </CardContent>
+      </Card>
+
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent>
-          <Typography>
-            {deleteTarget?.version 
-              ? `Are you sure you want to delete version "${deleteTarget.version}" of package "${deleteTarget.name}"?`
-              : `Are you sure you want to delete the entire package "${deleteTarget?.name}" and all its versions?`
-            }
-          </Typography>
-          <Typography color="error" sx={{ mt: 2 }}>
-            This action cannot be undone.
-          </Typography>
+          <DialogHeader>
+            <DialogTitle>{selectedPackage?.name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-muted-foreground">{selectedPackage?.summary}</p>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Author:</span>
+                <span className="ml-2">{selectedPackage?.author || 'Unknown'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">License:</span>
+                <span className="ml-2">{selectedPackage?.license || 'Unknown'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Install</Label>
+              <code className="bg-muted px-3 py-1.5 rounded block font-mono text-sm">
+                pip install {selectedPackage?.name}
+              </code>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
       </Dialog>
-      
-      {/* Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)}>
-        <DialogTitle>Upload Package</DialogTitle>
-        <DialogContent>
-          {uploadSuccess && (
-            <Alert severity="success" sx={{ mb: 2 }}>{uploadSuccess}</Alert>
-          )}
-          {uploadError && (
-            <Alert severity="error" sx={{ mb: 2 }}>{uploadError}</Alert>
-          )}
-          <input
-            accept=".whl,.tar.gz,.zip"
-            type="file"
-            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-            style={{ marginTop: 16 }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Supported formats: .whl, .tar.gz, .zip
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
-          <Button 
-            onClick={handleUploadConfirm} 
-            variant="contained"
-            disabled={!uploadFile || uploading}
-          >
-            {uploading ? 'Uploading...' : 'Upload'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Package"
+        description={`Are you sure you want to delete ${deleteTarget?.name}?`}
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteTarget) {
+            deletePackage(deleteTarget.name)
+            setDeleteDialogOpen(false)
+            setDeleteTarget(null)
+          }
+        }}
+        onCancel={() => { setDeleteDialogOpen(false); setDeleteTarget(null) }}
+      />
+
+      <ConfirmDialog
+        open={cleanDialogOpen}
+        title="Clear Cache"
+        description="This will clear all cached PyPI packages. Are you sure?"
+        onConfirm={() => {
+          cleanCache()
+          setCleanDialogOpen(false)
+        }}
+        onCancel={() => setCleanDialogOpen(false)}
+      />
+    </div>
   )
 }

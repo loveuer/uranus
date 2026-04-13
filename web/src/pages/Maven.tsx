@@ -1,177 +1,182 @@
 import { useEffect, useState } from 'react'
+import { useMavenStore } from '@/stores/maven'
+import { StatsCard } from '@/components/ui/stats-card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DataTable } from '@/components/ui/data-table'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
-  Box, Card, CardContent, Typography, Alert,
-  CircularProgress, Paper, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TablePagination, Button, TextField, Chip,
-} from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
-import { mavenApi } from '../api'
-import type { MavenArtifact } from '../types'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Box, Folder, HardDrive, Download, Search, MoreHorizontal, Eye, Copy } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function MavenPage() {
-  const [artifacts, setArtifacts] = useState<MavenArtifact[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(20)
-  const [search, setSearch] = useState('')
-  const [groupIdFilter, setGroupIdFilter] = useState('')
-  const [artifactIdFilter, setArtifactIdFilter] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const { fetchArtifacts, fetchRepositories, searchArtifacts, fetchVersions, selectArtifact, artifacts, repositories, versions, loading, selectedArtifact } = useMavenStore()
 
-  const loadArtifacts = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      let res
-      if (search) {
-        res = await mavenApi.searchArtifacts(search, page + 1, rowsPerPage)
-      } else {
-        res = await mavenApi.listArtifacts(page + 1, rowsPerPage, groupIdFilter, artifactIdFilter)
-      }
-      setArtifacts(res.data.data || [])
-      setTotal((res.data as unknown as { total: number }).total || 0)
-    } catch {
-      setError('Failed to load artifacts')
-    } finally {
-      setLoading(false)
+  const [search, setSearch] = useState('')
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  useEffect(() => {
+    fetchArtifacts()
+    fetchRepositories()
+  }, [])
+
+  const baseUrl = window.location.origin
+
+  const handleSearch = (value: string) => {
+    setSearch(value)
+    if (value) {
+      searchArtifacts(value)
+    } else {
+      fetchArtifacts()
     }
   }
 
-  useEffect(() => {
-    loadArtifacts()
-  }, [page, rowsPerPage])
+  const columns = [
+    {
+      accessorKey: 'group_id',
+      header: 'Group ID',
+      cell: (info: any) => <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{info.getValue()}</code>,
+    },
+    {
+      accessorKey: 'artifact_id',
+      header: 'Artifact',
+    },
+    {
+      accessorKey: 'version',
+      header: 'Latest',
+      cell: (info: any) => <Badge>{info.getValue()}</Badge>,
+    },
+    {
+      accessorKey: 'is_uploaded',
+      header: 'Source',
+      cell: (info: any) => <Badge variant="outline">{info.getValue() ? 'Uploaded' : 'Cached'}</Badge>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }: any) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => { selectArtifact(row.original); fetchVersions(row.original.group_id, row.original.artifact_id); setDetailOpen(true) }}>
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ]
 
-  const handleSearch = () => {
-    setPage(0)
-    loadArtifacts()
-  }
-
-  const formatCoordinates = (artifact: MavenArtifact) => {
-    return `${artifact.group_id}:${artifact.artifact_id}:${artifact.version}`
+  const generateDependencyXml = (artifact: any) => {
+    return `<dependency>
+  <groupId>${artifact.group_id}</groupId>
+  <artifactId>${artifact.artifact_id}</artifactId>
+  <version>${artifact.version}</version>
+</dependency>`
   }
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Maven Repository
-      </Typography>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Maven</h1>
+        <p className="text-muted-foreground">Java artifact repository</p>
+      </div>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatsCard title="Artifacts" value={artifacts.length} icon={<Box />} />
+        <StatsCard title="Groups" value={new Set(artifacts.map((a: any) => a.group_id)).size} icon={<Folder />} />
+        <StatsCard title="Repositories" value={repositories.length} icon={<HardDrive />} />
+        <StatsCard title="Downloads" value={0} icon={<Download />} />
+      </div>
 
-      <Card sx={{ mb: 2, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle>Artifacts</CardTitle>
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Search by group or artifact..."
+                className="w-[250px]"
+              />
+            </div>
+          </div>
+        </CardHeader>
         <CardContent>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <TextField
-              size="small"
-              label="Search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search artifacts..."
-              sx={{ minWidth: 200 }}
-            />
-            <TextField
-              size="small"
-              label="Group ID"
-              value={groupIdFilter}
-              onChange={(e) => setGroupIdFilter(e.target.value)}
-              placeholder="com.example"
-              sx={{ minWidth: 150 }}
-            />
-            <TextField
-              size="small"
-              label="Artifact ID"
-              value={artifactIdFilter}
-              onChange={(e) => setArtifactIdFilter(e.target.value)}
-              placeholder="myapp"
-              sx={{ minWidth: 150 }}
-            />
-            <Button
-              variant="contained"
-              startIcon={<SearchIcon />}
-              onClick={handleSearch}
-            >
-              Search
-            </Button>
-          </Box>
+          <DataTable columns={columns} data={artifacts} loading={loading} />
         </CardContent>
       </Card>
 
-      <Paper>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Coordinates (GAV)</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Source</TableCell>
-                <TableCell>Uploader</TableCell>
-                <TableCell>Created</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <CircularProgress size={24} />
-                  </TableCell>
-                </TableRow>
-              ) : artifacts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    No artifacts found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                artifacts.map((artifact) => (
-                  <TableRow key={artifact.id}>
-                    <TableCell>
-                      <Typography variant="body2" fontFamily="monospace">
-                        {formatCoordinates(artifact)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {artifact.is_snapshot ? (
-                        <Chip size="small" color="warning" label="SNAPSHOT" />
-                      ) : (
-                        <Chip size="small" color="success" label="Release" />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {artifact.is_uploaded ? (
-                        <Chip size="small" color="primary" label="Uploaded" />
-                      ) : (
-                        <Chip size="small" label="Proxied" />
-                      )}
-                    </TableCell>
-                    <TableCell>{artifact.uploader || '-'}</TableCell>
-                    <TableCell>
-                      {new Date(artifact.created_at).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_, p) => setPage(p)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10))
-            setPage(0)
-          }}
-        />
-      </Paper>
-    </Box>
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-lg">
+              {selectedArtifact?.group_id} : {selectedArtifact?.artifact_id}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label>Available Versions</Label>
+            <div className="flex flex-wrap gap-2">
+              {versions.map((v: string) => (
+                <Badge key={v} variant={v === selectedArtifact?.version ? "default" : "secondary"}>
+                  {v}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {selectedArtifact && (
+            <div className="space-y-2">
+              <Label>Maven Dependency</Label>
+              <div className="relative">
+                <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg font-mono text-sm overflow-x-auto">
+                  {generateDependencyXml(selectedArtifact)}
+                </pre>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute top-2 right-2 text-slate-400 hover:text-slate-100"
+                  onClick={() => navigator.clipboard.writeText(generateDependencyXml(selectedArtifact))}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Repository URL</Label>
+            <code className="text-sm bg-muted px-3 py-1.5 rounded block">
+              {baseUrl}/maven/
+            </code>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

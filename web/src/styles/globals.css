@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Background and Foreground */
+    --background: 210 40% 98%;    /* slate-50: #F8FAFC */
+    --foreground: 222 47% 11%;    /* slate-900: #0F172A */
+
+    /* Card */
+    --card: 0 0% 100%;            /* white */
+    --card-foreground: 222 47% 11%; /* slate-900 */
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary - Emerald */
+    --primary: 160 84% 39%;       /* emerald-600: #059669 */
+    --primary-foreground: 0 0% 100%; /* white */
+
+    /* Secondary - Slate */
+    --secondary: 215 25% 27%;     /* slate-700: #334155 */
+    --secondary-foreground: 0 0% 100%;
+
+    /* Muted */
+    --muted: 210 40% 96%;         /* slate-100: #F1F5F9 */
+    --muted-foreground: 215 16% 47%; /* slate-500: #64748B */
+
+    /* Accent */
+    --accent: 160 84% 39%;        /* emerald-600 */
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive */
+    --destructive: 0 84% 60%;     /* red-600: #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success */
+    --success: 160 84% 45%;       /* emerald-500: #10B981 */
+    --success-foreground: 0 0% 100%;
+
+    /* Warning */
+    --warning: 38 92% 50%;        /* amber-500: #F59E0B */
+    --warning-foreground: 0 0% 100%;
+
+    /* Info */
+    --info: 217 91% 60%;          /* blue-500: #3B82F6 */
+    --info-foreground: 0 0% 100%;
+
+    /* Border and Input */
+    --border: 214 32% 91%;        /* slate-200: #E2E8F0 */
+    --input: 214 32% 91%;
+
+    /* Ring */
+    --ring: 160 84% 39%;          /* emerald-600 */
+
+    /* Radius */
+    --radius: 0.5rem;             /* 8px */
+  }
+
+  .dark {
+    --background: 222 47% 11%;    /* slate-900: #0F172A */
+    --foreground: 210 40% 98%;    /* slate-50: #F8FAFC */
+
+    --card: 222 47% 15%;          /* slate-800: #1E293B */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 15%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 160 84% 45%;       /* emerald-500: #10B981 (lighter for contrast) */
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;     /* slate-800: #1E293B */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 217 33% 17%;         /* slate-800 */
+    --muted-foreground: 215 20% 65%; /* slate-400: #94A3B8 */
+
+    --accent: 160 84% 45%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 62% 50%;     /* red-500: #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 50%;       /* emerald-400: #34D399 */
+    --success-foreground: 222 47% 11%;
+
+    --warning: 48 96% 53%;        /* amber-400: #FBBF24 */
+    --warning-foreground: 222 47% 11%;
+
+    --info: 217 91% 67%;          /* blue-400: #60A5FA */
+    --info-foreground: 222 47% 11%;
+
+    --border: 217 33% 17%;        /* slate-700: #334155 */
+    --input: 217 33% 17%;
+    --ring: 160 84% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Focus visible styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Custom utilities */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  /* Tabular numbers for data alignment */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -1,307 +1,285 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useUsersStore } from '@/stores/users'
+import { useIsAdmin } from '@/stores/auth'
+import { StatsCard } from '@/components/ui/stats-card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DataTable } from '@/components/ui/data-table'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
-  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, OutlinedInput, Select, Switch,
-  TextField, Tooltip, Typography, Paper
-} from '@mui/material'
-import { DataGrid, type GridColDef } from '@mui/x-data-grid'
-import AddIcon from '@mui/icons-material/Add'
-import EditIcon from '@mui/icons-material/Edit'
-import DeleteIcon from '@mui/icons-material/Delete'
-import KeyIcon from '@mui/icons-material/Key'
-import type { User, Module } from '../types'
-import { ALL_MODULES } from '../types'
-import { userApi } from '../api'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Users, Shield, CheckCircle, UserPlus, MoreHorizontal, Edit, Key, Trash2, Plus } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const { fetchUsers, createUser, updateUser, resetPassword, deleteUser, selectUser, users, loading, selectedUser, creating, updating, deleting } = useUsersStore()
+  const isAdmin = useIsAdmin()
 
-  // 编辑
-  const [editUser, setEditUser] = useState<User | null>(null)
-  const [editData, setEditData] = useState({ email: '', is_admin: false, status: 1, upload_modules: [] as Module[] })
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
-  // 新建
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createData, setCreateData] = useState({ username: '', password: '', email: '', is_admin: false, upload_modules: [] as Module[] })
-  const [createError, setCreateError] = useState('')
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    is_admin: false,
+  })
 
-  // 重置密码
-  const [resetTarget, setResetTarget] = useState<User | null>(null)
-  const [resetPwd, setResetPwd] = useState('')
-  const [resetError, setResetError] = useState('')
+  const [newPassword, setNewPassword] = useState('')
 
-  const load = async () => {
-    setLoading(true)
-    try {
-      const res = await userApi.list(page + 1, 20)
-      setUsers(res.data.data.items)
-      setTotal(res.data.data.total)
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    fetchUsers()
+  }, [])
 
-  useEffect(() => { load() }, [page])
-
-  const handleEdit = (user: User) => {
-    setEditUser(user)
-    setEditData({ email: user.email, is_admin: user.is_admin, status: user.status, upload_modules: user.upload_modules || [] })
-  }
-
-  const handleSave = async () => {
-    if (!editUser) return
-    await userApi.update(editUser.id, editData)
-    setEditUser(null)
-    load()
-  }
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this user?')) return
-    await userApi.delete(id)
-    load()
-  }
-
-  const handleCreate = async () => {
-    setCreateError('')
-    if (!createData.username || !createData.password) {
-      setCreateError('Username and password are required')
-      return
-    }
-    try {
-      await userApi.create(createData)
-      setCreateOpen(false)
-      setCreateData({ username: '', password: '', email: '', is_admin: false, upload_modules: [] })
-      load()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setCreateError(msg || 'Failed to create user')
-    }
-  }
-
-  const handleResetPassword = async () => {
-    setResetError('')
-    if (!resetPwd) { setResetError('Password is required'); return }
-    if (resetPwd.length < 6) { setResetError('Password must be at least 6 characters'); return }
-    try {
-      await userApi.resetPassword(resetTarget!.id, resetPwd)
-      setResetTarget(null)
-      setResetPwd('')
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setResetError(msg || 'Failed to reset password')
-    }
-  }
-
-  const columns: GridColDef[] = [
-    { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'username', headerName: 'Username', flex: 1 },
-    { field: 'email', headerName: 'Email', flex: 1 },
+  const columns = [
     {
-      field: 'is_admin', headerName: 'Role', width: 100,
-      renderCell: ({ value }) => (
-        <Chip label={value ? 'Admin' : 'User'} color={value ? 'primary' : 'default'} size="small" />
+      accessorKey: 'username',
+      header: 'Username',
+      cell: ({ row }: any) => (
+        <div className="flex items-center gap-2">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback>{row.original.username[0].toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <span className="font-medium">{row.original.username}</span>
+        </div>
       ),
     },
     {
-      field: 'status', headerName: 'Status', width: 100,
-      renderCell: ({ value }) => (
-        <Chip label={value === 1 ? 'Active' : 'Disabled'} color={value === 1 ? 'success' : 'error'} size="small" />
+      accessorKey: 'email',
+      header: 'Email',
+      cell: (info: any) => <span className="text-muted-foreground">{info.getValue() || '-'}</span>,
+    },
+    {
+      accessorKey: 'is_admin',
+      header: 'Role',
+      cell: (info: any) => (
+        <Badge variant={info.getValue() ? "default" : "secondary"}>
+          {info.getValue() ? 'Admin' : 'User'}
+        </Badge>
       ),
     },
     {
-      field: 'upload_modules', headerName: 'Upload Permissions', flex: 1,
-      renderCell: ({ row }) => (
-        <Box>
-          {row.is_admin ? (
-            <Chip label="All Modules" color="primary" size="small" />
-          ) : row.upload_modules && row.upload_modules.length > 0 ? (
-            row.upload_modules.map((m: Module) => (
-              <Chip key={m} label={m} size="small" sx={{ mr: 0.5 }} />
-            ))
-          ) : (
-            <Chip label="No Upload" color="default" size="small" />
-          )}
-        </Box>
+      accessorKey: 'status',
+      header: 'Status',
+      cell: (info: any) => (
+        <Badge variant={info.getValue() === 1 ? "default" : "outline"}>
+          {info.getValue() === 1 ? 'Active' : 'Disabled'}
+        </Badge>
       ),
     },
     {
-      field: 'actions', headerName: 'Actions', width: 130, sortable: false,
-      renderCell: ({ row }) => (
-        <Box>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => handleEdit(row)}><EditIcon fontSize="small" /></IconButton>
-          </Tooltip>
-          <Tooltip title="Reset Password">
-            <IconButton size="small" onClick={() => { setResetTarget(row); setResetPwd(''); setResetError('') }}>
-              <KeyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" color="error" onClick={() => handleDelete(row.id)}><DeleteIcon fontSize="small" /></IconButton>
-          </Tooltip>
-        </Box>
+      accessorKey: 'created_at',
+      header: 'Created',
+      cell: (info: any) => <span className="text-sm text-muted-foreground">{formatDate(info.getValue())}</span>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }: any) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => { selectUser(row.original); setFormData({ username: row.original.username, email: row.original.email || '', password: '', is_admin: row.original.is_admin || false }); setEditDialogOpen(true) }}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { selectUser(row.original); setNewPassword(''); setResetPasswordDialogOpen(true) }}>
+              <Key className="mr-2 h-4 w-4" />
+              Reset Password
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => { selectUser(row.original); setDeleteDialogOpen(true) }} className="text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ]
 
+  const handleCreate = async () => {
+    const result = await createUser(formData)
+    if (result) {
+      setCreateDialogOpen(false)
+      setFormData({ username: '', email: '', password: '', is_admin: false })
+    }
+  }
+
+  const handleUpdate = async () => {
+    if (selectedUser) {
+      const success = await updateUser(selectedUser.id, formData)
+      if (success) {
+        setEditDialogOpen(false)
+      }
+    }
+  }
+
+  const handleResetPassword = async () => {
+    if (selectedUser && newPassword) {
+      const success = await resetPassword(selectedUser.id, newPassword)
+      if (success) {
+        setResetPasswordDialogOpen(false)
+        setNewPassword('')
+      }
+    }
+  }
+
+  const handleDelete = async () => {
+    if (selectedUser) {
+      const success = await deleteUser(selectedUser.id)
+      if (success) {
+        setDeleteDialogOpen(false)
+      }
+    }
+  }
+
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">Users</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
-          New User
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Users</h1>
+          <p className="text-muted-foreground">User account management</p>
+        </div>
+        <Button onClick={() => { setFormData({ username: '', email: '', password: '', is_admin: false }); setCreateDialogOpen(true) }}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create User
         </Button>
-      </Box>
-      {/* Glassy container for the data grid: wrap with Paper to avoid applying backdropFilter directly to DataGrid */}
-      <Paper variant="outlined" sx={{ p: 1, backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.8)' }}>
-        <DataGrid
-          rows={users}
-          columns={columns}
-          loading={loading}
-          rowCount={total}
-          pageSizeOptions={[20]}
-          paginationModel={{ page, pageSize: 20 }}
-          paginationMode="server"
-          onPaginationModelChange={(m) => setPage(m.page)}
-          autoHeight
-          sx={{ backgroundColor: 'transparent' }}
-          disableRowSelectionOnClick
-        />
-      </Paper>
+      </div>
 
-      {/* 新建对话框 */}
-      <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setCreateError('') }} maxWidth="xs" fullWidth>
-        <DialogTitle>New User</DialogTitle>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatsCard title="Total Users" value={users.length} icon={<Users />} />
+        <StatsCard title="Admins" value={users.filter((u: any) => u.is_admin).length} icon={<Shield />} />
+        <StatsCard title="Active" value={users.filter((u: any) => u.status === 1).length} icon={<CheckCircle />} />
+        <StatsCard title="Created Today" value={0} icon={<UserPlus />} />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle>Users</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable columns={columns} data={users} loading={loading} />
+        </CardContent>
+      </Card>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
-          <Box display="flex" flexDirection="column" gap={2} pt={1}>
-            {createError && (
-              <Typography color="error" variant="body2">{createError}</Typography>
-            )}
-            <TextField
-              label="Username *"
-              value={createData.username}
-              onChange={(e) => setCreateData({ ...createData, username: e.target.value })}
-            />
-            <TextField
-              label="Password *"
-              type="password"
-              value={createData.password}
-              onChange={(e) => setCreateData({ ...createData, password: e.target.value })}
-            />
-            <TextField
-              label="Email"
-              value={createData.email}
-              onChange={(e) => setCreateData({ ...createData, email: e.target.value })}
-            />
-            <FormControlLabel
-              control={<Switch checked={createData.is_admin} onChange={(e) => setCreateData({ ...createData, is_admin: e.target.checked })} />}
-              label="Admin"
-            />
-            {!createData.is_admin && (
-              <FormControl fullWidth>
-                <InputLabel>Upload Permissions</InputLabel>
-                <Select
-                  multiple
-                  value={createData.upload_modules}
-                  onChange={(e) => setCreateData({ ...createData, upload_modules: e.target.value as Module[] })}
-                  input={<OutlinedInput label="Upload Permissions" />}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {(selected as Module[]).map((value) => (
-                        <Chip key={value} label={value} size="small" />
-                      ))}
-                    </Box>
-                  )}
-                >
-                  {ALL_MODULES.map((module) => (
-                    <MenuItem key={module} value={module}>
-                      {module}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Create User</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Username</Label>
+              <Input value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Password</Label>
+              <Input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Admin Role</Label>
+              <Switch checked={formData.is_admin} onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={creating}>{creating ? 'Creating...' : 'Create User'}</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setCreateOpen(false); setCreateError('') }}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreate}>Create</Button>
-        </DialogActions>
       </Dialog>
 
-      {/* 编辑对话框 */}
-      <Dialog open={!!editUser} onClose={() => setEditUser(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Edit User: {editUser?.username}</DialogTitle>
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
-          <Box display="flex" flexDirection="column" gap={2} pt={1}>
-            <TextField
-              label="Email"
-              value={editData.email}
-              onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-            />
-            <FormControlLabel
-              control={<Switch checked={editData.is_admin} onChange={(e) => setEditData({ ...editData, is_admin: e.target.checked })} />}
-              label="Admin"
-            />
-            <FormControlLabel
-              control={<Switch checked={editData.status === 1} onChange={(e) => setEditData({ ...editData, status: e.target.checked ? 1 : 0 })} />}
-              label="Active"
-            />
-            {!editData.is_admin && (
-              <FormControl fullWidth>
-                <InputLabel>Upload Permissions</InputLabel>
-                <Select
-                  multiple
-                  value={editData.upload_modules}
-                  onChange={(e) => setEditData({ ...editData, upload_modules: e.target.value as Module[] })}
-                  input={<OutlinedInput label="Upload Permissions" />}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {(selected as Module[]).map((value) => (
-                        <Chip key={value} label={value} size="small" />
-                      ))}
-                    </Box>
-                  )}
-                >
-                  {ALL_MODULES.map((module) => (
-                    <MenuItem key={module} value={module}>
-                      {module}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Username</Label>
+              <Input value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>New Password (leave empty to keep current)</Label>
+              <Input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Admin Role</Label>
+              <Switch checked={formData.is_admin} onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdate} disabled={updating}>{updating ? 'Updating...' : 'Save Changes'}</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditUser(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave}>Save</Button>
-        </DialogActions>
       </Dialog>
 
-      {/* 重置密码对话框（管理员） */}
-      <Dialog open={!!resetTarget} onClose={() => setResetTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Reset Password: {resetTarget?.username}</DialogTitle>
+      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
         <DialogContent>
-          <Box display="flex" flexDirection="column" gap={2} pt={1}>
-            {resetError && <Typography color="error" variant="body2">{resetError}</Typography>}
-            <TextField
-              label="New Password *"
-              type="password"
-              value={resetPwd}
-              onChange={(e) => setResetPwd(e.target.value)}
-              autoFocus
-            />
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>Set a new password for {selectedUser?.username}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleResetPassword} disabled={updating}>Reset Password</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setResetTarget(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleResetPassword}>Reset</Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete User"
+        description={`Are you sure you want to delete ${selectedUser?.username}? This action cannot be undone.`}
+        variant="destructive"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteDialogOpen(false)}
+      />
+    </div>
   )
 }

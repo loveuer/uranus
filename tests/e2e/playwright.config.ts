@@ -13,13 +13,22 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    // Setup project for authentication
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
   ],
   webServer: {
-    command: 'JWT_SECRET=test-secret-12345 ../../uranus --address 0.0.0.0:9817 --data /tmp/uranus-e2e-data',
+    command: 'JWT_SECRET=*** ../../uranus --address 0.0.0.0:9817 --data /tmp/uranus-e2e-data',
     url: 'http://localhost:9817/api/v1/alpine/stats',
     reuseExistingServer: !process.env.CI,
     timeout: 60000,

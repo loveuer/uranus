@@ -1,21 +1,21 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { useAuth } from '../store/auth'
-import Layout from '../components/Layout'
-import LoginPage from '../pages/Login'
-import UsersPage from '../pages/Users'
-import FilesPage from '../pages/Files'
-import NpmPage from '../pages/Npm'
-import GoPage from '../pages/Go'
-import DockerPage from '../pages/Docker'
-import MavenPage from '../pages/Maven'
-import PyPIPage from '../pages/PyPI'
-import AlpinePage from '../pages/Alpine'
-import GCPage from '../pages/GC'
-import SettingsPage from '../pages/Settings'
+import { useAuthStore } from '@/stores/auth'
+import { Layout } from '@/components/layout'
+import LoginPage from '@/pages/Login'
+import UsersPage from '@/pages/Users'
+import FilesPage from '@/pages/Files'
+import NpmPage from '@/pages/Npm'
+import GoPage from '@/pages/Go'
+import DockerPage from '@/pages/Docker'
+import MavenPage from '@/pages/Maven'
+import PyPIPage from '@/pages/PyPI'
+import AlpinePage from '@/pages/Alpine'
+import GCPage from '@/pages/GC'
+import SettingsPage from '@/pages/Settings'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth()
-  return token ? <>{children}</> : <Navigate to="/login" replace />
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 export default function AppRoutes() {

@@ -30,15 +30,42 @@ func (h *SettingHandler) GetAll(c *ursa.Ctx) error {
 		result[service.SettingNpmUpstream] = service.DefaultNpmUpstream
 	}
 	// enabled/addr 字段默认值，确保前端能看到完整的 key 列表
-	for _, key := range []string{
-		service.SettingNpmEnabled, service.SettingNpmAddr,
-		service.SettingFileEnabled, service.SettingFileAddr,
-		service.SettingAlpineEnabled, service.SettingAlpineUpstream,
-		service.SettingAlpineBranches, service.SettingAlpineSyncInterval,
-		service.SettingAlpineCacheTTL,
-	} {
+	defaults := map[string]string{
+		// npm
+		service.SettingNpmEnabled: "false",
+		service.SettingNpmAddr:    "",
+		// go
+		service.SettingGoEnabled:  "false",
+		service.SettingGoAddr:     "",
+		service.SettingGoUpstream: service.DefaultGoUpstream,
+		service.SettingGoPrivate:  "",
+		// oci
+		service.SettingOciEnabled:  "false",
+		service.SettingOciAddr:     "",
+		service.SettingOciUpstream: service.DefaultOciUpstream,
+		// maven
+		service.SettingMavenEnabled:  "false",
+		service.SettingMavenAddr:     "",
+		service.SettingMavenUpstream: service.DefaultMavenUpstream,
+		// pypi
+		service.SettingPyPIEnabled:  "false",
+		service.SettingPyPIAddr:     "",
+		service.SettingPyPIUpstream: service.DefaultPyPIUpstream,
+		// alpine
+		service.SettingAlpineEnabled:      "false",
+		service.SettingAlpineBranches:     "v3.23,v3.22,v3.21,v3.20,edge",
+		service.SettingAlpineSyncInterval: "30",
+		service.SettingAlpineCacheTTL:     "5",
+		// file
+		service.SettingFileEnabled: "false",
+		service.SettingFileAddr:    "",
+		// general storage
+		"storage_path":     "./x-data",
+		"max_storage_gb":   "500",
+	}
+	for key, val := range defaults {
 		if _, ok := result[key]; !ok {
-			result[key] = ""
+			result[key] = val
 		}
 	}
 	return c.JSON(ursa.Map{"code": 0, "message": "success", "data": result})

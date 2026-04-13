@@ -1,272 +1,138 @@
-import { useState } from 'react'
+import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Box, Card, CardContent, TextField, Button, Typography,
-  Alert, CircularProgress, InputAdornment,
-  IconButton, Divider,
-} from '@mui/material'
-import { styled } from '@mui/material/styles'
-import { useAuth } from '../store/auth'
-import { authApi } from '../api'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import AccountCircleIcon from '@mui/icons-material/AccountCircle'
-import LockIcon from '@mui/icons-material/Lock'
-
-const GradientBackground = styled(Box)({
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: 'linear-gradient(135deg, #11998e 0%, #0d7a6e 100%)',
-  position: 'relative',
-  overflow: 'hidden',
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'radial-gradient(circle at 20% 80%, rgba(17, 153, 142, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%)',
-  },
-})
-
-const FloatingShape = styled(Box)({
-  position: 'absolute',
-  borderRadius: '50%',
-  background: 'rgba(255, 255, 255, 0.05)',
-  animation: 'float 20s infinite ease-in-out',
-  '@keyframes float': {
-    '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
-    '50%': { transform: 'translateY(-20px) rotate(180deg)' },
-  },
-})
-
-const StyledCard = styled(Card)({
-  width: 420,
-  maxWidth: '90vw',
-  borderRadius: 16,
-  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-  // Glass surface styling
-  backdropFilter: 'blur(8px)',
-  background: 'rgba(255, 255, 255, 0.72)',
-  border: '1px solid rgba(255,255,255,0.85)',
-  position: 'relative',
-  zIndex: 1,
-})
-
-const LogoAvatar = styled(Box)({
-  width: 120,
-  height: 120,
-  borderRadius: '50%',
-  overflow: 'hidden',
-  boxShadow: '0 15px 40px rgba(17, 153, 142, 0.4)',
-  marginBottom: 8,
-  '& img': {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-})
+import { User, Lock, AlertCircle } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { PasswordInput } from '@/components/ui/password-input'
+import { Separator } from '@/components/ui/separator'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { login } = useAuth()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const login = useAuthStore((state) => state.login)
+
+  const [username, setUsername] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [error, setError] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
+
     try {
       const res = await authApi.login(username, password)
       login(res.data.data.token, res.data.data.user)
       navigate('/')
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })
-        ?.response?.data?.message
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       setError(msg || 'Login failed')
     } finally {
       setLoading(false)
     }
   }
 
-  const toggleShowPassword = () => {
-    setShowPassword(!showPassword)
-  }
-
   return (
-    <GradientBackground>
-      {/* 装饰性浮动形状 */}
-      <FloatingShape sx={{ width: 300, height: 300, top: '10%', left: '10%', animationDelay: '0s' }} />
-      <FloatingShape sx={{ width: 200, height: 200, top: '60%', right: '15%', animationDelay: '5s' }} />
-      <FloatingShape sx={{ width: 150, height: 150, bottom: '20%', left: '20%', animationDelay: '10s' }} />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 relative overflow-hidden">
+      {/* Decorative floating shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-white/5 animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-white/5 animate-pulse delay-1000" />
+        <div className="absolute top-1/2 right-1/3 w-32 h-32 rounded-full bg-white/5 animate-pulse delay-500" />
+      </div>
 
-      <StyledCard>
-        <CardContent sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Login card */}
+      <Card className="w-full max-w-md relative z-10 shadow-xl bg-white/90 backdrop-blur-sm">
+        <CardHeader className="text-center">
           {/* Logo */}
-          <LogoAvatar>
-            <img src="/uranus-icon.png" alt="Uranus" />
-          </LogoAvatar>
+          <div className="flex justify-center mb-4">
+            <div className="w-24 h-24 rounded-full overflow-hidden shadow-lg ring-4 ring-emerald-500/20">
+              <img src="/uranus-icon.png" alt="Uranus" className="w-full h-full object-cover" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl">Uranus Repository</CardTitle>
+          <CardDescription>
+            Universal artifact management
+          </CardDescription>
+        </CardHeader>
 
-          {/* 标题 */}
-          <Typography variant="body1" color="text.secondary" mb={3} textAlign="center">
-            Artifact Repository Manager
-          </Typography>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Error message */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          {/* 错误提示 */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 2, width: '100%', borderRadius: 2 }}>
-              {error}
-            </Alert>
-          )}
+            {/* Username */}
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  required
+                  className="pl-10"
+                  autoFocus
+                />
+              </div>
+            </div>
 
-          {/* 登录表单 */}
-          <Box component="form" onSubmit={handleSubmit} display="flex" flexDirection="column" gap={2.5} width="100%">
-            <TextField
-              label="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <AccountCircleIcon sx={{ color: 'rgba(17, 153, 142, 0.6)' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                  transition: 'all 0.2s ease',
-                  '& fieldset': {
-                    borderColor: 'rgba(17, 153, 142, 0.2)',
-                    borderWidth: 1.5,
-                  },
-                  '&:hover fieldset': {
-                    borderColor: 'rgba(17, 153, 142, 0.4)',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#11998e',
-                    borderWidth: 2,
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: 'rgba(0, 0, 0, 0.5)',
-                  '&.Mui-focused': {
-                    color: '#11998e',
-                  },
-                },
-              }}
-            />
-            <TextField
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon sx={{ color: 'rgba(17, 153, 142, 0.6)' }} />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={toggleShowPassword}
-                      edge="end"
-                      size="small"
-                      sx={{
-                        color: 'rgba(17, 153, 142, 0.6)',
-                        '&:hover': {
-                          color: '#11998e',
-                          backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                        },
-                      }}
-                    >
-                      {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                  transition: 'all 0.2s ease',
-                  '& fieldset': {
-                    borderColor: 'rgba(17, 153, 142, 0.2)',
-                    borderWidth: 1.5,
-                  },
-                  '&:hover fieldset': {
-                    borderColor: 'rgba(17, 153, 142, 0.4)',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#11998e',
-                    borderWidth: 2,
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: 'rgba(0, 0, 0, 0.5)',
-                  '&.Mui-focused': {
-                    color: '#11998e',
-                  },
-                },
-              }}
-            />
+            {/* Password */}
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <PasswordInput
+                  id="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  className="pl-10"
+                />
+              </div>
+            </div>
 
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              disabled={loading}
-              fullWidth
-              sx={{
-                mt: 1,
-                py: 1.5,
-                borderRadius: 2,
-                background: 'linear-gradient(135deg, #11998e 0%, #0d7a6e 100%)',
-                boxShadow: '0 4px 15px rgba(17, 153, 142, 0.4)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #0d7a6e 0%, #11998e 100%)',
-                  boxShadow: '0 6px 20px rgba(17, 153, 142, 0.5)',
-                },
-              }}
-            >
-              {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
+            {/* Submit button */}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && (
+                <svg className="mr-2 h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              Sign In
             </Button>
-          </Box>
-
-          <Divider sx={{ width: '100%', my: 3 }} />
-
-          {/* 底部信息 */}
-          <Typography variant="caption" color="text.secondary" textAlign="center">
-            Default credentials: admin / admin123
-          </Typography>
+          </form>
         </CardContent>
-      </StyledCard>
 
-      {/* 版本信息 */}
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 16,
-          right: 16,
-          color: 'rgba(255, 255, 255, 0.6)',
-        }}
-      >
-        <Typography variant="caption">v2.6.2</Typography>
-      </Box>
-    </GradientBackground>
+        <Separator />
+
+        <CardFooter className="flex justify-center">
+          <p className="text-xs text-muted-foreground">
+            Default credentials: admin / admin123
+          </p>
+        </CardFooter>
+      </Card>
+
+      {/* Footer */}
+      <div className="fixed bottom-4 text-center text-xs text-white/60">
+        Version v2.0.0 - Secure Connection
+      </div>
+    </div>
   )
 }
