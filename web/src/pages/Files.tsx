@@ -296,6 +296,7 @@ export default function FilesPage() {
           columns={columns}
           data={files}
           searchable
+          searchColumnId="path"
           searchPlaceholder="Search files..."
         />
       )}

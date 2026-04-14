@@ -42,6 +42,7 @@ interface DataTableProps<TData, TValue> {
   onSearchChange?: (value: string) => void
   emptyMessage?: string
   className?: string
+  searchColumnId?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -56,17 +57,20 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   emptyMessage = 'No results.',
   className,
+  searchColumnId = 'name',
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
 
+  const hasPagination = !!pagination
+
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    ...(hasPagination ? { getPaginationRowModel: getPaginationRowModel() } : {}),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
@@ -94,12 +98,12 @@ export function DataTable<TData, TValue>({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={searchPlaceholder}
-              value={searchValue ?? (table.getColumn('name')?.getFilterValue() as string ?? '')}
+              value={searchValue ?? (table.getColumn(searchColumnId)?.getFilterValue() as string ?? '')}
               onChange={(e) => {
                 if (onSearchChange) {
                   onSearchChange(e.target.value)
                 } else {
-                  table.getColumn('name')?.setFilterValue(e.target.value)
+                  table.getColumn(searchColumnId)?.setFilterValue(e.target.value)
                 }
               }}
               className="max-w-sm pl-10"
