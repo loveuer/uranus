@@ -138,7 +138,7 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
     set({ deleting: true, error: null })
     try {
       await userApi.delete(id)
-      get().fetchUsers()
+      await get().fetchUsers()
       set({ deleting: false })
       return true
     } catch (err: any) {

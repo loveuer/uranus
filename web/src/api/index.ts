@@ -1,5 +1,5 @@
 import http from './http'
-import type { ApiResponse, LoginResponse, PageData, User, NpmPackage, NpmVersion, GoCacheStats, OciRepository, OciTagInfo, OciCacheStats, MavenArtifact, MavenRepository, MavenRepositoryConfig, PyPIPackage, AlpinePackage, AlpineCacheStats, GcStatus, GcCandidate, GcResult, GcUnreferencedBlobs } from '../types'
+import type { ApiResponse, LoginResponse, PageData, User, NpmPackage, NpmVersion, GoCacheStats, OciRepository, OciTagInfo, OciCacheStats, MavenArtifact, MavenRepository, MavenRepositoryConfig, PyPIPackage, GcStatus, GcCandidate, GcResult, GcUnreferencedBlobs } from '../types'
 
 // 认证
 export const authApi = {
@@ -55,6 +55,8 @@ export const ociApi = {
     http.get<ApiResponse<OciRepository[]>>('/oci/repositories', { params: { page, page_size: pageSize, search: search || undefined } }),
   listTags: (name: string) =>
     http.get<ApiResponse<OciTagInfo[]>>('/oci/repositories/tags', { params: { name } }),
+  deleteTag: (name: string, tag: string) =>
+    http.delete<ApiResponse<null>>('/oci/repositories/tags', { params: { name, tag } }),
   deleteRepo: (id: number) => http.delete<ApiResponse<null>>(`/oci/repositories/${id}`),
   getStats: () => http.get<ApiResponse<OciCacheStats>>('/oci/stats'),
   cleanCache: () => http.delete<ApiResponse<null>>('/oci/cache'),
@@ -96,21 +98,7 @@ export const pypiApi = {
     http.delete<ApiResponse<{ deleted_count: number }>>('/api/v1/pypi/cache'),
 }
 
-// Alpine APK 仓库
-export const alpineApi = {
-  listPackages: (branch = 'v3.19', repo = 'main', arch = 'x86_64') =>
-    http.get<ApiResponse<AlpinePackage[]>>(`/api/v1/alpine/packages`, { params: { branch, repo, arch } }),
-  searchPackages: (q: string, branch = 'v3.19', repo = 'main', arch = 'x86_64') =>
-    http.get<ApiResponse<AlpinePackage[]>>(`/api/v1/alpine/packages/search`, { params: { q, branch, repo, arch } }),
-  getPackageDetail: (name: string, branch = 'v3.19', repo = 'main', arch = 'x86_64') =>
-    http.get<ApiResponse<AlpinePackage>>(`/api/v1/alpine/packages/${name}`, { params: { branch, repo, arch } }),
-  getStats: () =>
-    http.get<ApiResponse<AlpineCacheStats>>('/api/v1/alpine/stats'),
-  sync: (branch?: string, repo?: string, arch?: string) =>
-    http.post<ApiResponse<null>>('/api/v1/alpine/sync', null, { params: { branch, repo, arch } }),
-  cleanCache: () =>
-    http.delete<ApiResponse<null>>('/api/v1/alpine/cache'),
-}
+
 
 // OCI GC 管理
 export const gcApi = {

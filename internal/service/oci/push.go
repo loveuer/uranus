@@ -43,6 +43,7 @@ func (s *Service) PushManifest(ctx context.Context, name, reference, mediaType s
 	}
 
 	// 事务处理
+	var staleBlobPaths []string
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 获取或创建仓库
 		var repo model.OciRepository
@@ -168,9 +169,11 @@ func (s *Service) PushManifest(ctx context.Context, name, reference, mediaType s
 		}
 
 		if previousDigest != "" && previousDigest != digest {
-			if err := s.releaseManifestIfUnreferenced(tx, repo.ID, previousDigest, "tag_replaced"); err != nil {
+			paths, err := s.releaseManifestIfUnreferenced(tx, repo.ID, previousDigest, "tag_replaced")
+			if err != nil {
 				return fmt.Errorf("release previous manifest: %w", err)
 			}
+			staleBlobPaths = append(staleBlobPaths, paths...)
 		}
 
 		return nil
@@ -180,13 +183,23 @@ func (s *Service) PushManifest(ctx context.Context, name, reference, mediaType s
 		return "", err
 	}
 
+	// 删除已释放的 blob 文件（事务提交后）
+	s.removeStaleBlobs(staleBlobPaths)
+
 	return digest, nil
 }
 
-func (s *Service) deleteManifestRecord(tx *gorm.DB, manifest model.OciManifest, reason string) error {
+func (s *Service) deleteManifestRecord(tx *gorm.DB, manifest model.OciManifest, reason string) ([]string, error) {
+	// Look up repository name for GC candidate tracking
+	var repoName string
+	var repo model.OciRepository
+	if err := tx.First(&repo, manifest.RepositoryID).Error; err == nil {
+		repoName = repo.Name
+	}
+
 	var links []model.OciManifestBlob
 	if err := tx.Where("manifest_id = ?", manifest.ID).Find(&links).Error; err != nil {
-		return err
+		return nil, err
 	}
 
 	var blobIDs []uint
@@ -195,18 +208,19 @@ func (s *Service) deleteManifestRecord(tx *gorm.DB, manifest model.OciManifest, 
 		if err := tx.Model(&model.OciBlob{}).
 			Where("id = ? AND ref_count > 0", l.BlobID).
 			UpdateColumn("ref_count", gorm.Expr("ref_count - ?", 1)).Error; err != nil {
-			return err
+			return nil, err
 		}
 	}
 
+	var staleBlobPaths []string
 	if len(blobIDs) > 0 {
 		if err := tx.Where("manifest_id = ?", manifest.ID).Delete(&model.OciManifestBlob{}).Error; err != nil {
-			return err
+			return nil, err
 		}
 
 		var blobs []model.OciBlob
 		if err := tx.Where("id IN ?", blobIDs).Find(&blobs).Error; err != nil {
-			return err
+			return nil, err
 		}
 
 		var unreferenced []model.OciBlob
@@ -216,32 +230,35 @@ func (s *Service) deleteManifestRecord(tx *gorm.DB, manifest model.OciManifest, 
 			}
 		}
 		if len(unreferenced) > 0 {
-			if err := s.gc.MarkForGC(tx, unreferenced, reason); err != nil {
-				return err
+			if err := s.gc.MarkForGC(tx, unreferenced, reason, repoName); err != nil {
+				return nil, err
+			}
+			for _, b := range unreferenced {
+				staleBlobPaths = append(staleBlobPaths, s.blobPath(b.Digest))
 			}
 		}
 	}
 
-	return tx.Delete(&manifest).Error
+	return staleBlobPaths, tx.Delete(&manifest).Error
 }
 
-func (s *Service) releaseManifestIfUnreferenced(tx *gorm.DB, repoID uint, manifestDigest, reason string) error {
+func (s *Service) releaseManifestIfUnreferenced(tx *gorm.DB, repoID uint, manifestDigest, reason string) ([]string, error) {
 	var count int64
 	if err := tx.Model(&model.OciTag{}).
 		Where("repository_id = ? AND manifest_digest = ?", repoID, manifestDigest).
 		Count(&count).Error; err != nil {
-		return err
+		return nil, err
 	}
 	if count > 0 {
-		return nil
+		return nil, nil
 	}
 
 	var manifest model.OciManifest
 	if err := tx.Where("repository_id = ? AND digest = ?", repoID, manifestDigest).First(&manifest).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 
 	return s.deleteManifestRecord(tx, manifest, reason)
@@ -336,7 +353,8 @@ func (s *Service) CheckBlobExists(digest string) bool {
 func (s *Service) DeleteManifest(ctx context.Context, name, reference string, userID uint) error {
 	name = s.normalizeImageName(name)
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var staleBlobPaths []string
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 获取仓库信息
 		var repo model.OciRepository
 		if err := tx.Where("name = ?", name).First(&repo).Error; err != nil {
@@ -385,9 +403,11 @@ func (s *Service) DeleteManifest(ctx context.Context, name, reference string, us
 			}
 		}
 
-		if err := s.releaseManifestIfUnreferenced(tx, repo.ID, manifestDigest, "manifest_deleted"); err != nil {
+		paths, err := s.releaseManifestIfUnreferenced(tx, repo.ID, manifestDigest, "manifest_deleted")
+		if err != nil {
 			return err
 		}
+		staleBlobPaths = append(staleBlobPaths, paths...)
 
 		var remainingTags int64
 		if err := tx.Model(&model.OciTag{}).Where("repository_id = ?", repo.ID).Count(&remainingTags).Error; err != nil {
@@ -407,6 +427,22 @@ func (s *Service) DeleteManifest(ctx context.Context, name, reference string, us
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// 删除已释放的 blob 文件（事务提交后）
+	s.removeStaleBlobs(staleBlobPaths)
+	return nil
+}
+
+// removeStaleBlobs 删除磁盘上已释放的 blob 文件
+func (s *Service) removeStaleBlobs(paths []string) {
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			log.Printf("[oci] failed to remove stale blob %s: %v", p, err)
+		}
+	}
 }
 
 var ErrForbidden = errors.New("forbidden")

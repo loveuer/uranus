@@ -6,7 +6,6 @@ export { useOciStore, useOciRepositories, useOciTags, useOciStats, useOciLoading
 export { useGoStore, useGoStats, useGoLoading } from './go'
 export { useMavenStore, useMavenArtifacts, useMavenRepositories, useMavenVersions, useMavenLoading } from './maven'
 export { usePyPIStore, usePyPIPackages, usePyPIStats, usePyPILoading, usePyPISelectedPackage } from './pypi'
-export { useAlpineStore, useAlpinePackages, useAlpineStats, useAlpineLoading, useAlpineBranch, useAlpineRepo, useAlpineArch } from './alpine'
 export { useGcStore, useGcCandidates, useGcHistory, useGcUnreferenced, useGcAutoStatus, useGcRunning, useGcLoading } from './gc'
 export { useUsersStore, useUsers, useUsersLoading, useSelectedUser } from './users'
 export { useSettingsStore, useSettings, useSettingsLoading, useSettingsSaving, useSetting } from './settings'

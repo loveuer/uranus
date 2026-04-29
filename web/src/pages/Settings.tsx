@@ -17,7 +17,6 @@ import {
   Container,
   Box,
   CircleDot,
-  Mountain,
   Folder,
   Database,
 } from 'lucide-react'
@@ -61,7 +60,7 @@ export default function SettingsPage() {
     // Validate upstream fields
     const upstreamKeys = [
       'npm.upstream', 'go.upstream', 'oci.upstream',
-      'maven.upstream', 'pypi.upstream', 'alpine.upstream',
+      'maven.upstream', 'pypi.upstream',
     ]
     for (const key of upstreamKeys) {
       const val = localSettings[key]
@@ -80,7 +79,7 @@ export default function SettingsPage() {
     }
 
     // Validate number fields
-    const numberKeys = ['alpine.sync_interval', 'alpine.cache_ttl', 'max_storage_gb']
+    const numberKeys = ['max_storage_gb']
     for (const key of numberKeys) {
       const val = localSettings[key]
       if (val && val.trim()) {
@@ -134,7 +133,6 @@ export default function SettingsPage() {
     { value: 'oci', icon: Container, label: 'OCI' },
     { value: 'maven', icon: Box, label: 'Maven' },
     { value: 'pypi', icon: CircleDot, label: 'PyPI' },
-    { value: 'alpine', icon: Mountain, label: 'Alpine' },
     { value: 'file', icon: Folder, label: 'File' },
     { value: 'storage', icon: Database, label: 'Storage' },
   ]
@@ -349,43 +347,6 @@ export default function SettingsPage() {
                   addrKey="pypi.addr"
                   upstreamPlaceholder="https://pypi.org"
                   addrPlaceholder=":8080"
-                  localSettings={localSettings}
-                  onChange={handleChange}
-                  errors={errors}
-                />
-              </TabsContent>
-
-              {/* Alpine Tab - Keep as is per constraint */}
-              <TabsContent value="alpine">
-                <ModuleSettingsCard
-                  title="Alpine APK Settings"
-                  description="Alpine Linux package proxy configuration"
-                  enabledKey="alpine.enabled"
-                  upstreamKey="alpine.upstream"
-                  upstreamPlaceholder="https://dl-cdn.alpinelinux.org/alpine"
-                  extraFields={[
-                    {
-                      key: 'alpine.branches',
-                      label: 'Branches',
-                      type: 'text',
-                      placeholder: 'v3.23,v3.22,v3.21,v3.20,edge',
-                      description: 'Alpine branches to sync (comma-separated)',
-                    },
-                    {
-                      key: 'alpine.sync_interval',
-                      label: 'Sync Interval (minutes)',
-                      type: 'number',
-                      placeholder: '30',
-                      description: 'Interval for syncing Alpine packages',
-                    },
-                    {
-                      key: 'alpine.cache_ttl',
-                      label: 'Cache TTL (minutes)',
-                      type: 'number',
-                      placeholder: '5',
-                      description: 'Cache TTL for Alpine package metadata',
-                    },
-                  ]}
                   localSettings={localSettings}
                   onChange={handleChange}
                   errors={errors}

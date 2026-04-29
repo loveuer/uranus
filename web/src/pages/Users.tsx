@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useUsersStore } from '@/stores/users'
-import { useIsAdmin } from '@/stores/auth'
+import { useIsAdmin, useUser } from '@/stores/auth'
+import { toast } from '@/stores/ui'
 import { StatsCard } from '@/components/ui/stats-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DataTable } from '@/components/ui/data-table'
@@ -32,6 +33,7 @@ import {
 export default function UsersPage() {
   const { fetchUsers, createUser, updateUser, resetPassword, deleteUser, selectUser, users, loading, selectedUser, creating, updating, deleting } = useUsersStore()
   const isAdmin = useIsAdmin()
+  const currentUser = useUser()
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -94,30 +96,40 @@ export default function UsersPage() {
     },
     {
       id: 'actions',
-      cell: ({ row }: any) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => { selectUser(row.original); setFormData({ username: row.original.username, email: row.original.email || '', password: '', is_admin: row.original.is_admin || false }); setEditDialogOpen(true) }}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { selectUser(row.original); setNewPassword(''); setResetPasswordDialogOpen(true) }}>
-              <Key className="mr-2 h-4 w-4" />
-              Reset Password
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => { selectUser(row.original); setDeleteDialogOpen(true) }} className="text-destructive">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: ({ row }: any) => {
+        const isSelf = row.original.id === currentUser?.id
+        const isTargetAdmin = row.original.is_admin
+        const canDelete = !isSelf && !isTargetAdmin
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => { selectUser(row.original); setFormData({ username: row.original.username, email: row.original.email || '', password: '', is_admin: row.original.is_admin || false }); setEditDialogOpen(true) }}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { selectUser(row.original); setNewPassword(''); setResetPasswordDialogOpen(true) }}>
+                <Key className="mr-2 h-4 w-4" />
+                Reset Password
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => { selectUser(row.original); setDeleteDialogOpen(true) }}
+                disabled={!canDelete}
+                className="text-destructive"
+                title={isSelf ? 'Cannot delete yourself' : isTargetAdmin ? 'Revoke admin role first' : undefined}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
     },
   ]
 
@@ -153,6 +165,9 @@ export default function UsersPage() {
       const success = await deleteUser(selectedUser.id)
       if (success) {
         setDeleteDialogOpen(false)
+      } else {
+        const errMsg = useUsersStore.getState().error || 'Failed to delete user'
+        toast.error(errMsg)
       }
     }
   }

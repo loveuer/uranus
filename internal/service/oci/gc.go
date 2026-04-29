@@ -165,6 +165,10 @@ func (g *GCService) FindUnreferencedBlobs(tx *gorm.DB) ([]model.OciBlob, error) 
 	var unreferenced []model.OciBlob
 	for _, b := range allBlobs {
 		if !marks[b.ID] {
+			// 跳过代理缓存的 blob（Cached=true 表示由代理下载缓存，需长期保留）
+			if b.Cached {
+				continue
+			}
 			// 检查是否满足最小无引用时间要求
 			if g.minUnreferencedAge > 0 {
 				// 计算最后一次被引用的可能时间（使用 UpdatedAt 或 CreatedAt）
@@ -185,7 +189,7 @@ func (g *GCService) FindUnreferencedBlobs(tx *gorm.DB) ([]model.OciBlob, error) 
 }
 
 // MarkForGC 将 blob 标记为待删除（软删除）
-func (g *GCService) MarkForGC(tx *gorm.DB, blobs []model.OciBlob, reason string) error {
+func (g *GCService) MarkForGC(tx *gorm.DB, blobs []model.OciBlob, reason string, repoName ...string) error {
 	now := time.Now()
 
 	for _, b := range blobs {
@@ -210,12 +214,13 @@ func (g *GCService) MarkForGC(tx *gorm.DB, blobs []model.OciBlob, reason string)
 		}
 
 		candidate := model.GcCandidate{
-			BlobID:       b.ID,
-			Digest:       b.Digest,
-			Size:         b.Size,
-			Reason:       reason,
-			RepositoryID: b.RepositoryID,
-			CreatedAt:    now,
+			BlobID:         b.ID,
+			Digest:         b.Digest,
+			Size:           b.Size,
+			Reason:         reason,
+			RepositoryID:   b.RepositoryID,
+			RepositoryName: strings.Join(repoName, ""),
+			CreatedAt:      now,
 		}
 		if err := tx.Create(&candidate).Error; err != nil {
 			return err
@@ -236,6 +241,10 @@ func (g *GCService) SweepPhase(tx *gorm.DB, marks map[uint]bool, dryRun bool) (d
 	var toDelete []model.OciBlob
 	for _, b := range blobs {
 		if !marks[b.ID] {
+			// 跳过代理缓存的 blob（Cached=true 表示由代理下载缓存，需长期保留）
+			if b.Cached {
+				continue
+			}
 			// 检查是否满足最小无引用时间
 			if g.minUnreferencedAge > 0 {
 				lastRefTime := b.UpdatedAt

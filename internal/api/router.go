@@ -3,7 +3,6 @@ package api
 import (
 	"io/fs"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -147,12 +146,13 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	ociAdmin := api.Group("/oci", middleware.Auth(r.authService))
 	ociAdmin.Get("/repositories", ociHandler.ListRepositories)
 	ociAdmin.Get("/repositories/tags", ociHandler.ListRepoTags) // ?name=library/nginx
+	ociAdmin.Delete("/repositories/tags", ociHandler.DeleteTag) // ?name=...&tag=...
 	ociAdmin.Delete("/repositories/:id", ociHandler.DeleteRepository)
 	ociAdmin.Get("/stats", ociHandler.GetStats)
 	ociAdmin.Delete("/cache", ociHandler.CleanCache)
 
 	// GC 管理接口（供前端使用，需管理员权限）
-	gcHandler := handler.NewGCHandler(r.db, filepath.Join(r.dataDir, "oci"))
+	gcHandler := handler.NewGCHandler(r.db, r.ociService.GCService())
 	gcAdmin := api.Group("/gc", middleware.Auth(r.authService), middleware.AdminOnly())
 	gcAdmin.Post("/run", gcHandler.Run)
 	gcAdmin.Post("/dry-run", gcHandler.DryRun)
@@ -212,10 +212,6 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	app.Get("/pypi/packages/:name/:filename", pypiHandler.GetPackageFile)
 	app.Post("/pypi/legacy/", middleware.Auth(r.authService), middleware.RequireUploadPermission(model.ModulePyPI), pypiHandler.UploadPackage)
 
-	// ── Alpine APK repository（主端口，/alpine 前缀）─────────────────────────────
-	alpineHandler := handler.NewAlpineHandler(r.dataDir, r.settingService)
-	RegisterAlpineRoutes(app, alpineHandler, r.authService)
-
 	// ── 前端静态文件 + SPA fallback（由 ursa.Config.NotFoundHandler 处理）──────
 }
 
@@ -268,30 +264,6 @@ func RegisterMavenRoutes(app *ursa.App, mavenHandler *handler.MavenHandler, auth
 	app.Put(prefix+"/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleMaven), mavenHandler.PutArtifact)
 	// DELETE /maven/*path - 删除制品（需认证+权限）
 	app.Delete(prefix+"/*path", middleware.Auth(auth), middleware.RequireUploadPermission(model.ModuleMaven), mavenHandler.DeleteArtifact)
-}
-
-// RegisterAlpineRoutes 注册 Alpine APK 仓库路由
-func RegisterAlpineRoutes(app *ursa.App, alpineHandler *handler.AlpineHandler, auth *service.AuthService) {
-	// 公开代理接口（APK 客户端使用）
-	// GET /alpine/:branch/:repo/:arch/APKINDEX.tar.gz
-	app.Get("/alpine/:branch/:repo/:arch/APKINDEX.tar.gz", alpineHandler.GetAPKINDEX)
-	// GET /alpine/:branch/:repo/:arch/*.apk
-	app.Get("/alpine/:branch/:repo/:arch/:file", alpineHandler.GetPackage)
-
-	// 管理 API（需认证）
-	api := app.Group("/api/v1/alpine")
-	api.Use(middleware.Auth(auth))
-
-	// 包查询
-	api.Get("/packages", alpineHandler.ListPackages)
-	api.Get("/packages/search", alpineHandler.SearchPackages)
-	api.Get("/packages/:name", alpineHandler.GetPackageInfo)
-
-	// 管理操作（需管理员）
-	admin := api.Group("", middleware.AdminOnly())
-	admin.Post("/sync", alpineHandler.TriggerSync)
-	admin.Get("/stats", alpineHandler.GetStats)
-	admin.Delete("/cache", alpineHandler.CleanCache)
 }
 
 // RegisterPyPIRoutes 注册 PyPI 仓库路由

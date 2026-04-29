@@ -51,11 +51,6 @@ func (h *SettingHandler) GetAll(c *ursa.Ctx) error {
 		service.SettingPyPIEnabled:  "false",
 		service.SettingPyPIAddr:     "",
 		service.SettingPyPIUpstream: service.DefaultPyPIUpstream,
-		// alpine
-		service.SettingAlpineEnabled:      "false",
-		service.SettingAlpineBranches:     "v3.23,v3.22,v3.21,v3.20,edge",
-		service.SettingAlpineSyncInterval: "30",
-		service.SettingAlpineCacheTTL:     "5",
 		// file
 		service.SettingFileEnabled: "false",
 		service.SettingFileAddr:    "",

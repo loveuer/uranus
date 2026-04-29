@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 
@@ -36,12 +35,6 @@ const (
 	SettingPyPIUpstream = "pypi.upstream"
 	SettingPyPIEnabled  = "pypi.enabled"
 	SettingPyPIAddr     = "pypi.addr"
-
-	SettingAlpineUpstream     = "alpine.upstream"
-	SettingAlpineEnabled      = "alpine.enabled"
-	SettingAlpineBranches     = "alpine.branches"
-	SettingAlpineSyncInterval = "alpine.sync_interval"
-	SettingAlpineCacheTTL     = "alpine.cache_ttl"
 
 	DefaultNpmUpstream   = "https://registry.npmmirror.com"
 	DefaultGoUpstream    = "https://goproxy.cn,direct"
@@ -240,55 +233,6 @@ func (s *SettingService) GetPyPIEnabled() bool {
 // GetPyPIAddr 返回 PyPI 专用端口监听地址
 func (s *SettingService) GetPyPIAddr() string {
 	return s.Get(SettingPyPIAddr)
-}
-
-// GetAlpineUpstream 返回 Alpine 代理上游地址
-func (s *SettingService) GetAlpineUpstream() string {
-	if v := s.Get(SettingAlpineUpstream); v != "" {
-		return v
-	}
-	return "https://dl-cdn.alpinelinux.org/alpine"
-}
-
-// GetAlpineEnabled 返回 Alpine 代理是否已启用
-func (s *SettingService) GetAlpineEnabled() bool {
-	return s.Get(SettingAlpineEnabled) == "true"
-}
-
-// GetAlpineBranches 返回 Alpine 分支列表
-func (s *SettingService) GetAlpineBranches() string {
-	if v := s.Get(SettingAlpineBranches); v != "" {
-		return v
-	}
-	return "v3.23,v3.22,v3.21,v3.20,edge"
-}
-
-// GetAlpineSyncInterval 返回同步间隔（分钟）
-func (s *SettingService) GetAlpineSyncInterval() int {
-	v := s.Get(SettingAlpineSyncInterval)
-	if v == "" {
-		return 30
-	}
-	var minutes int
-	fmt.Sscanf(v, "%d", &minutes)
-	if minutes <= 0 {
-		return 30
-	}
-	return minutes
-}
-
-// GetAlpineCacheTTL 返回缓存 TTL（分钟）
-func (s *SettingService) GetAlpineCacheTTL() int {
-	v := s.Get(SettingAlpineCacheTTL)
-	if v == "" {
-		return 5
-	}
-	var minutes int
-	fmt.Sscanf(v, "%d", &minutes)
-	if minutes <= 0 {
-		return 5
-	}
-	return minutes
 }
 
 // GetAll 返回所有配置项（供设置页面展示，直接读 DB 保证数据最新）

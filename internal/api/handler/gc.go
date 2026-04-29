@@ -16,19 +16,11 @@ type GCHandler struct {
 	svc *oci.GCService
 }
 
-// NewGCHandler 创建 GC handler
-func NewGCHandler(db *gorm.DB, dataDir string) *GCHandler {
+// NewGCHandler 创建 GC handler，复用已有的 GCService 实例
+func NewGCHandler(db *gorm.DB, svc *oci.GCService) *GCHandler {
 	return &GCHandler{
 		db:  db,
-		svc: oci.NewGCService(db, dataDir),
-	}
-}
-
-// NewGCHandlerWithOptions 创建带配置的 GC handler
-func NewGCHandlerWithOptions(db *gorm.DB, dataDir string, opts oci.GCOptions) *GCHandler {
-	return &GCHandler{
-		db:  db,
-		svc: oci.NewGCServiceWithOptions(db, dataDir, opts),
+		svc: svc,
 	}
 }
 

@@ -174,7 +174,7 @@ func (s *Service) ListRepositories(ctx context.Context, page, pageSize int, sear
 		var cachedCount int64
 		s.db.WithContext(ctx).Model(&model.OciBlob{}).Where("repository_id = ? AND cached = ?", r.ID, true).Count(&cachedCount)
 		var totalSize int64
-		s.db.WithContext(ctx).Model(&model.OciBlob{}).Where("repository_id = ?", r.ID).Select("COALESCE(SUM(size),0)").Scan(&totalSize)
+		s.db.WithContext(ctx).Model(&model.OciBlob{}).Where("repository_id = ? AND deleted_at IS NULL", r.ID).Select("COALESCE(SUM(size),0)").Scan(&totalSize)
 
 		result = append(result, RepoInfo{
 			ID:              r.ID,
@@ -233,7 +233,8 @@ func (s *Service) DeleteRepository(ctx context.Context, id uint) error {
 		return ErrRepoNotFound
 	}
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var staleBlobPaths []string
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. 获取该仓库的所有 manifest
 		var manifests []model.OciManifest
 		if err := tx.Where("repository_id = ?", id).Find(&manifests).Error; err != nil {
@@ -291,6 +292,7 @@ func (s *Service) DeleteRepository(ctx context.Context, id uint) error {
 				if err := tx.Model(&currentBlob).Update("deleted_at", now).Error; err != nil {
 					log.Printf("[oci] failed to mark blob %s for gc: %v", b.Digest, err)
 				}
+				staleBlobPaths = append(staleBlobPaths, s.blobPath(b.Digest))
 				// 添加到 GC 候选表
 				candidate := model.GcCandidate{
 					BlobID:         b.ID,
@@ -310,6 +312,13 @@ func (s *Service) DeleteRepository(ctx context.Context, id uint) error {
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// 删除已释放的 blob 文件（事务提交后）
+	s.removeStaleBlobs(staleBlobPaths)
+	return nil
 }
 
 // GetStats 获取缓存统计
@@ -317,8 +326,8 @@ func (s *Service) GetStats(ctx context.Context) (*CacheStats, error) {
 	stats := &CacheStats{}
 	s.db.WithContext(ctx).Model(&model.OciRepository{}).Count(&stats.RepoCount)
 	s.db.WithContext(ctx).Model(&model.OciTag{}).Count(&stats.TagCount)
-	s.db.WithContext(ctx).Model(&model.OciBlob{}).Where("cached = ?", true).Count(&stats.BlobCount)
-	s.db.WithContext(ctx).Model(&model.OciBlob{}).Select("COALESCE(SUM(size),0)").Scan(&stats.SizeBytes)
+	s.db.WithContext(ctx).Model(&model.OciBlob{}).Where("cached = ? AND deleted_at IS NULL", true).Count(&stats.BlobCount)
+	s.db.WithContext(ctx).Model(&model.OciBlob{}).Where("deleted_at IS NULL").Select("COALESCE(SUM(size),0)").Scan(&stats.SizeBytes)
 	return stats, nil
 }
 

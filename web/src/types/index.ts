@@ -1,4 +1,4 @@
-export type Module = 'file' | 'npm' | 'oci' | 'maven' | 'pypi' | 'go' | 'alpine'
+export type Module = 'file' | 'npm' | 'oci' | 'maven' | 'pypi' | 'go'
 
 export interface User {
   id: number
@@ -11,7 +11,7 @@ export interface User {
   upload_modules: Module[]
 }
 
-export const ALL_MODULES: Module[] = ['file', 'npm', 'oci', 'maven', 'pypi', 'go', 'alpine']
+export const ALL_MODULES: Module[] = ['file', 'npm', 'oci', 'maven', 'pypi', 'go']
 
 export interface FileEntry {
   id: number
@@ -193,33 +193,6 @@ export interface PyPIFile {
   upload_time_formatted: string
   cached: boolean
   is_uploaded: boolean
-}
-
-// Alpine APK Types
-export interface AlpinePackage {
-  Name: string
-  Version: string
-  Architecture: string
-  Description: string
-  URL: string
-  License: string
-  Maintainer: string
-  Size: number
-  InstalledSize: number
-  Checksum: string
-  Origin: string
-  BuildTime: string
-  Commit: string
-  IsCached: boolean
-  CachePath: string
-  CacheTime: string
-}
-
-export interface AlpineCacheStats {
-  TotalIndexes: number
-  TotalPackages: number
-  CachedPackages: number
-  CacheSize: number
 }
 
 // OCI GC Types

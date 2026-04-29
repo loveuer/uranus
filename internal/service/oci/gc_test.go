@@ -65,11 +65,11 @@ func setupTestData(t *testing.T, db *gorm.DB) (repoID uint, manifestID uint, blo
 	}
 	repoID = repo.ID
 
-	// 创建 blob（模拟镜像的 layers 和 config）
+	// 创建 blob（模拟镜像的 layers 和 config，pushed blob 的 Cached=false）
 	blobs := []model.OciBlob{
-		{RepositoryID: repoID, Digest: "sha256:blob1abc123", Size: 1024, RefCount: 0, Cached: true},
-		{RepositoryID: repoID, Digest: "sha256:blob2def456", Size: 2048, RefCount: 0, Cached: true},
-		{RepositoryID: repoID, Digest: "sha256:config789", Size: 512, RefCount: 0, Cached: true},
+		{RepositoryID: repoID, Digest: "sha256:blob1abc123", Size: 1024, RefCount: 0, Cached: false},
+		{RepositoryID: repoID, Digest: "sha256:blob2def456", Size: 2048, RefCount: 0, Cached: false},
+		{RepositoryID: repoID, Digest: "sha256:config789", Size: 512, RefCount: 0, Cached: false},
 	}
 	for i := range blobs {
 		if err := db.WithContext(ctx).Create(&blobs[i]).Error; err != nil {

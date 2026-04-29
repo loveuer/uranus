@@ -385,6 +385,26 @@ func (h *OciHandler) DeleteRepository(c *ursa.Ctx) error {
 	return c.JSON(ursa.Map{"code": 0, "message": "deleted"})
 }
 
+// DeleteTag DELETE /api/v1/oci/repositories/tags?name=...&tag=...
+func (h *OciHandler) DeleteTag(c *ursa.Ctx) error {
+	name := c.Query("name")
+	tag := c.Query("tag")
+	if name == "" || tag == "" {
+		return c.Status(400).JSON(ursa.Map{"code": 400, "message": "name and tag are required"})
+	}
+	userID := middleware.GetUserID(c)
+	if err := h.oci.DeleteManifest(c.Request.Context(), name, tag, userID); err != nil {
+		if errors.Is(err, ocisvc.ErrManifestNotFound) {
+			return c.Status(404).JSON(ursa.Map{"code": 404, "message": "tag not found"})
+		}
+		if errors.Is(err, ocisvc.ErrForbidden) {
+			return c.Status(403).JSON(ursa.Map{"code": 403, "message": "forbidden"})
+		}
+		return c.Status(500).JSON(ursa.Map{"code": 500, "message": err.Error()})
+	}
+	return c.JSON(ursa.Map{"code": 0, "message": "deleted"})
+}
+
 // GetStats GET /api/v1/oci/stats
 func (h *OciHandler) GetStats(c *ursa.Ctx) error {
 	stats, err := h.oci.GetStats(c.Request.Context())
