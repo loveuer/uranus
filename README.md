@@ -203,6 +203,12 @@ Usage of uranus:
 
 详细 API 文档请参考 [API Docs](./docs/api.md)
 
+## Roadmap / TODO
+
+| 项目 | 状态 |
+|------|------|
+| Alpine APK 管理页面（前端） | 🔜 待开发 |
+
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
