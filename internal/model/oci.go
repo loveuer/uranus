@@ -56,8 +56,6 @@ type OciBlob struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at" gorm:"index"` // 软删除时间，用于 GC 延迟删除
-
 	RepositoryID uint   `json:"repository_id" gorm:"index;not null"`
 	Digest       string `json:"digest" gorm:"uniqueIndex;size:128;not null"` // sha256:...
 	Size         int64  `json:"size"`

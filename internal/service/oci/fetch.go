@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"os"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -276,8 +274,8 @@ func (s *Service) DeleteRepository(ctx context.Context, id uint) error {
 			return err
 		}
 
-		// 5. 检查并标记需要删除的 blob（ref_count == 0 的）
-		// 注意：不立即删除，让 GC 任务处理
+		// 5. 删除 ref_count <= 0 的 blob
+		var unreferencedIDs []uint
 		for _, b := range blobs {
 			var currentBlob model.OciBlob
 			if err := tx.Where("id = ?", b.ID).First(&currentBlob).Error; err != nil {
@@ -287,26 +285,13 @@ func (s *Service) DeleteRepository(ctx context.Context, id uint) error {
 				return err
 			}
 			if currentBlob.RefCount <= 0 {
-				// 标记为软删除
-				now := time.Now()
-				if err := tx.Model(&currentBlob).Update("deleted_at", now).Error; err != nil {
-					log.Printf("[oci] failed to mark blob %s for gc: %v", b.Digest, err)
-				}
+				unreferencedIDs = append(unreferencedIDs, b.ID)
 				staleBlobPaths = append(staleBlobPaths, s.blobPath(b.Digest))
-				// 添加到 GC 候选表
-				candidate := model.GcCandidate{
-					BlobID:         b.ID,
-					Digest:         b.Digest,
-					Size:           b.Size,
-					Reason:         "repository_deleted",
-					RepositoryID:   id,
-					RepositoryName: repo.Name,
-					CreatedAt:      now,
-				}
-				if err := tx.Create(&candidate).Error; err != nil {
-					// 忽略重复错误
-					log.Printf("[oci] failed to create gc candidate for blob %s: %v", b.Digest, err)
-				}
+			}
+		}
+		if len(unreferencedIDs) > 0 {
+			if err := tx.Where("id IN ?", unreferencedIDs).Delete(&model.OciBlob{}).Error; err != nil {
+				return err
 			}
 		}
 

@@ -26,7 +26,6 @@ type Service struct {
 	db         *gorm.DB
 	dataDir    string // {data}/oci
 	settingSvc *service.SettingService
-	gc         *GCService
 
 	mu         sync.RWMutex
 	httpClient *http.Client
@@ -37,20 +36,12 @@ type Service struct {
 
 // New 创建 OCI 服务实例
 func New(db *gorm.DB, dataDir string, settingSvc *service.SettingService) *Service {
-	return NewWithOptions(db, dataDir, settingSvc, DefaultGCOptions())
-}
-
-// NewWithOptions 创建带 GC 配置的 OCI 服务实例
-func NewWithOptions(db *gorm.DB, dataDir string, settingSvc *service.SettingService, gcOpts GCOptions) *Service {
 	s := &Service{
 		db:         db,
 		dataDir:    filepath.Join(dataDir, "oci"),
 		settingSvc: settingSvc,
 	}
 	s.rebuildClient()
-
-	// GC 服务初始化，数据目录同 OCI blob 存储路径
-	s.gc = NewGCServiceWithOptions(db, s.dataDir, gcOpts)
 
 	// 代理设置变更时重建 httpClient
 	settingSvc.OnChange(service.SettingOciHttpProxy, func(_ string) { s.rebuildClient() })
@@ -101,11 +92,6 @@ func (s *Service) client() *http.Client {
 	c := s.httpClient
 	s.mu.RUnlock()
 	return c
-}
-
-// GCService 返回 GC 服务实例（用于管理接口）
-func (s *Service) GCService() *GCService {
-	return s.gc
 }
 
 // blobDir 返回 blob 存储目录

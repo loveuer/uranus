@@ -151,18 +151,6 @@ func (r *Router) Setup(app *ursa.App, goHandler *handler.GoHandler) {
 	ociAdmin.Get("/stats", ociHandler.GetStats)
 	ociAdmin.Delete("/cache", ociHandler.CleanCache)
 
-	// GC 管理接口（供前端使用，需管理员权限）
-	gcHandler := handler.NewGCHandler(r.db, r.ociService.GCService())
-	gcAdmin := api.Group("/gc", middleware.Auth(r.authService), middleware.AdminOnly())
-	gcAdmin.Post("/run", gcHandler.Run)
-	gcAdmin.Post("/dry-run", gcHandler.DryRun)
-	gcAdmin.Post("/run-detail", gcHandler.RunWithDetail)
-	gcAdmin.Get("/status", gcHandler.Status)
-	gcAdmin.Get("/candidates", gcHandler.Candidates)
-	gcAdmin.Post("/restore", gcHandler.Restore)
-	gcAdmin.Get("/auto-status", gcHandler.AutoGCStatus)
-	gcAdmin.Get("/unreferenced", gcHandler.UnreferencedBlobs)
-
 	// Maven 管理接口（供前端使用，需认证）
 	mavenAdmin := api.Group("/maven", middleware.Auth(r.authService))
 	mavenAdmin.Get("/artifacts", mavenHandler.ListArtifacts)

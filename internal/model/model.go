@@ -26,7 +26,5 @@ func AutoMigrate(db *gorm.DB) error {
 		&PyPIPackage{},
 		&PyPIVersion{},
 		&PyPIFile{},
-		&GcStatus{},
-		&GcCandidate{},
 	)
 }

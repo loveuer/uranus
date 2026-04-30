@@ -190,13 +190,6 @@ func (s *Service) PushManifest(ctx context.Context, name, reference, mediaType s
 }
 
 func (s *Service) deleteManifestRecord(tx *gorm.DB, manifest model.OciManifest, reason string) ([]string, error) {
-	// Look up repository name for GC candidate tracking
-	var repoName string
-	var repo model.OciRepository
-	if err := tx.First(&repo, manifest.RepositoryID).Error; err == nil {
-		repoName = repo.Name
-	}
-
 	var links []model.OciManifestBlob
 	if err := tx.Where("manifest_id = ?", manifest.ID).Find(&links).Error; err != nil {
 		return nil, err
@@ -223,18 +216,16 @@ func (s *Service) deleteManifestRecord(tx *gorm.DB, manifest model.OciManifest, 
 			return nil, err
 		}
 
-		var unreferenced []model.OciBlob
+		var unreferencedIDs []uint
 		for _, b := range blobs {
 			if b.RefCount <= 0 {
-				unreferenced = append(unreferenced, b)
+				unreferencedIDs = append(unreferencedIDs, b.ID)
+				staleBlobPaths = append(staleBlobPaths, s.blobPath(b.Digest))
 			}
 		}
-		if len(unreferenced) > 0 {
-			if err := s.gc.MarkForGC(tx, unreferenced, reason, repoName); err != nil {
+		if len(unreferencedIDs) > 0 {
+			if err := tx.Where("id IN ?", unreferencedIDs).Delete(&model.OciBlob{}).Error; err != nil {
 				return nil, err
-			}
-			for _, b := range unreferenced {
-				staleBlobPaths = append(staleBlobPaths, s.blobPath(b.Digest))
 			}
 		}
 	}

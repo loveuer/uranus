@@ -6,7 +6,6 @@ import {
   Container,
   Box,
   CircleDot,
-  Trash2,
   Users,
   Settings,
   ChevronLeft,
@@ -25,7 +24,6 @@ const navItems = [
   { icon: Container, label: 'Docker', path: '/docker' },
   { icon: Box, label: 'Maven', path: '/maven' },
   { icon: CircleDot, label: 'PyPI', path: '/pypi' },
-  { icon: Trash2, label: 'GC', path: '/gc' },
   { icon: Users, label: 'Users', path: '/users', admin: true },
   { icon: Settings, label: 'Settings', path: '/settings', admin: true },
 ]
