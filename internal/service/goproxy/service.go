@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/goproxy/goproxy"
+	"golang.org/x/mod/module"
 
 	"gitea.loveuer.com/loveuer/uranus/v2/internal/service"
 )
@@ -188,7 +189,11 @@ func (f *httpProxyFetcher) List(ctx context.Context, path string) ([]string, err
 		return nil, errors.New("private module not supported in pure proxy mode: " + path)
 	}
 
-	url := f.upstreamURL(path + "/@v/list")
+	escapedPath, err := module.EscapePath(path)
+	if err != nil {
+		return nil, err
+	}
+	url := f.upstreamURL(escapedPath + "/@v/list")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -227,7 +232,11 @@ func (f *httpProxyFetcher) Query(ctx context.Context, path, query string) (strin
 
 	// 处理 latest 查询
 	if query == "latest" {
-		url := f.upstreamURL(path + "/@latest")
+		escapedPath, err := module.EscapePath(path)
+		if err != nil {
+			return "", time.Time{}, err
+		}
+		url := f.upstreamURL(escapedPath + "/@latest")
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return "", time.Time{}, err
@@ -258,7 +267,15 @@ func (f *httpProxyFetcher) Query(ctx context.Context, path, query string) (strin
 	}
 
 	// 其他查询直接获取 .info 文件
-	url := f.upstreamURL(path + "/@v/" + query + ".info")
+	escapedPath, err := module.EscapePath(path)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	escapedQuery, err := module.EscapeVersion(query)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	url := f.upstreamURL(escapedPath + "/@v/" + escapedQuery + ".info")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", time.Time{}, err
@@ -296,8 +313,17 @@ func (f *httpProxyFetcher) Download(ctx context.Context, path, version string) (
 		return nil, nil, nil, errors.New("private module not supported in pure proxy mode: " + path)
 	}
 
+	escapedPath, err := module.EscapePath(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	escapedVersion, err := module.EscapeVersion(version)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	// 下载 .info 文件
-	infoURL := f.upstreamURL(path + "/@v/" + version + ".info")
+	infoURL := f.upstreamURL(escapedPath + "/@v/" + escapedVersion + ".info")
 	infoData, err := f.downloadBytes(ctx, infoURL)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("download info: %w", err)
@@ -305,7 +331,7 @@ func (f *httpProxyFetcher) Download(ctx context.Context, path, version string) (
 	info = &readSeekCloser{bytes.NewReader(infoData)}
 
 	// 下载 .mod 文件
-	modURL := f.upstreamURL(path + "/@v/" + version + ".mod")
+	modURL := f.upstreamURL(escapedPath + "/@v/" + escapedVersion + ".mod")
 	modData, err := f.downloadBytes(ctx, modURL)
 	if err != nil {
 		info.Close()
@@ -314,7 +340,7 @@ func (f *httpProxyFetcher) Download(ctx context.Context, path, version string) (
 	mod = &readSeekCloser{bytes.NewReader(modData)}
 
 	// 下载 .zip 文件
-	zipURL := f.upstreamURL(path + "/@v/" + version + ".zip")
+	zipURL := f.upstreamURL(escapedPath + "/@v/" + escapedVersion + ".zip")
 	zipData, err := f.downloadBytes(ctx, zipURL)
 	if err != nil {
 		info.Close()
